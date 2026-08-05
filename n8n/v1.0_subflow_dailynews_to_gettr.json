@@ -1,0 +1,898 @@
+{
+  "name": "v1.0_subflow_dailynews_to_gettr",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "check_get",
+        "key": "={{ $('config').first().json.redis_key_prefix + $json.hash }}",
+        "keyType": "string",
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "name": "Check Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        960
+      ],
+      "id": "6a4d4469-10e1-4498-8f15-50302123cae1",
+      "alwaysOutputData": false,
+      "credentials": {
+        "redis": {
+          "id": "7KNoWHz8WpypqT8l",
+          "name": "Redis-Upstash Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.check_get }}",
+              "operation": "isEmpty"
+            },
+            {
+              "value1": "={{ $json.hash }}",
+              "operation": "isEmpty"
+            }
+          ]
+        },
+        "combineOperation": "any"
+      },
+      "name": "Not Posted Before?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        896
+      ],
+      "id": "d57a30ea-91c8-4072-b7d8-a9f0069046c0",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": " https://gettr.com/api/u/post",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-app-auth",
+              "value": "={{ $json.gettr_post_auth }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $json.gettr_post_data }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        720
+      ],
+      "id": "d48d8c9e-43ba-471b-b6c4-5fe3f6f5f27d",
+      "name": "Post to Gettr"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $('config').first().json.redis_key_prefix + $('Not Posted Before?').item.json.hash}}",
+        "value": "={{ new Date().toISOString() }}",
+        "keyType": "string",
+        "expire": true,
+        "ttl": 864000
+      },
+      "name": "Mark Posted in Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        896
+      ],
+      "id": "d76fc583-bbcd-425c-930a-6e4a30ea1e63",
+      "credentials": {
+        "redis": {
+          "id": "7KNoWHz8WpypqT8l",
+          "name": "Redis-Upstash Key"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Already Posted - Skip",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        1104
+      ],
+      "id": "48d3e3b8-a50b-4c6e-92ab-e421f74bfd53"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -784,
+        912
+      ],
+      "id": "149b3b48-d576-4c41-87bf-323ce625b0ab",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        192,
+        624
+      ],
+      "id": "3cad5462-4539-485e-a45b-e30f11592262",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "LNjgrsietmT9SDea",
+          "mode": "list",
+          "cachedResultName": "newsroom — clean_post_data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "post_content": "={{ $json.post_content }}",
+            "created_at": "={{ $json.published_at }}",
+            "prev_img": "={{ $json.metadata.imageUrl }}",
+            "prev_ttl": "={{ $json.metadata.title }}",
+            "prev_desc": "={{ $json.metadata.description }}",
+            "prev_src_link": "={{ $json.url_text }}",
+            "user_id": "={{ $node['config'].json.pub_post_author_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "post_content",
+              "displayName": "post_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object"
+            },
+            {
+              "id": "prev_img",
+              "displayName": "prev_img",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "prev_ttl",
+              "displayName": "prev_ttl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "prev_desc",
+              "displayName": "prev_desc",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "prev_src_link",
+              "displayName": "prev_src_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        720
+      ],
+      "id": "b91c3d65-283c-4408-aea6-31753af92d54",
+      "name": "clean_post_data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fix N8N JS code to process all input items and return same number of outputs\nconst items = $input.all();\n\n// Process each item and return array with same length\nreturn items.map(item => {\n  const { post_content, prev_desc, prev_img, prev_src_link, prev_ttl } = item.json;\n\n  const postData = {\n    data: {\n      _t: \"post\",\n      acl: { _t: \"acl\" },\n      txt: post_content,\n      dsc: prev_desc,\n      previmg: prev_img,\n      prevsrc: prev_src_link,\n      ttl: prev_ttl,\n      udate: Date.now(),\n      cdate: Date.now(),\n      uid: $('config').first().json.pub_post_author_id\n    },\n    aux: null,\n    serial: \"post\"\n  };\n\n  const auth = {\n    user: $(\"config\").first().json.pub_post_author_id, \n    token: $('config').first().json.pub_post_author_token\n  };\n\n  return { \n    gettr_post_data: JSON.stringify(postData),\n    gettr_post_auth: JSON.stringify(auth) \n  };\n}); "
+      },
+      "name": "Prepare Gettr Post w/o Media",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        720
+      ],
+      "id": "dfc82430-2168-4f14-8004-68843447b214"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Ttkv6qBU1f6Y3rR9",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Ttkv6qBU1f6Y3rR9",
+          "cachedResultName": "newsroom — retrieve_preview_metadata"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "page_url": "=",
+            "text": "={{ $('Not Posted Before?').item.json.post_content }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "page_url",
+              "displayName": "page_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -48,
+        704
+      ],
+      "id": "26dda796-9e5c-485f-80e9-10b583665084",
+      "name": "get preview data"
+    },
+    {
+      "parameters": {
+        "functionCode": "const crypto = require('crypto');\n\nfor (const item of items) {\n  let postContent = item.json.post_content || '';\n  const mediaUrl = Array.isArray(item.json.media) && item.json.media.length > 0\n    ? item.json.media[0]\n    : '';\n\n  // 1. 文本裁剪 (limit to 500 characters for simplicity)\n  postContent = postContent.substring(0, 500);\n\n  // 2. 去掉URL参数再拼接\n  let cleanMediaUrl = '';\n  if (mediaUrl) {\n    // Remove URL parameters (everything after ?)\n    cleanMediaUrl = mediaUrl.split('?')[0];\n  }\n\n  const combinedContent = `${postContent}${cleanMediaUrl}`.trim();\n\n  if (combinedContent) {\n    // 3. 用最简单的方法计算hash - 直接对原始内容计算\n    const hash = crypto.createHash('sha1').update(combinedContent).digest('hex').slice(0, 12);\n    item.json.hash = hash;\n  } else {\n    item.json.hash = null;\n  }\n}\n\nreturn items;"
+      },
+      "name": "Cal Post Hash",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        880
+      ],
+      "id": "91328a50-ba9e-437d-bbac-377aeabb14b0"
+    },
+    {
+      "parameters": {
+        "content": "#### Upload media go GETTR media server",
+        "height": 140
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        288
+      ],
+      "id": "b59aa178-2e06-435a-880a-c46757bfeca1",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "QBAZqoq3zMEwJzPc",
+          "mode": "list",
+          "cachedResultName": "newsroom — upload_media_to_gettr_v.1.1"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "media_url": "={{ $json.mediaUrl }}",
+            "user_id": "={{ $('config').first().json.pub_post_author_id }}",
+            "user_token": "={{ $('config').first().json.pub_post_author_token }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "media_url",
+              "displayName": "media_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "user_token",
+              "displayName": "user_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "download_cookie",
+              "displayName": "download_cookie",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        320
+      ],
+      "id": "7b269959-962a-47e1-b632-afc5ac049296",
+      "name": "upload media"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of items) {\n  const mediaList = item.json.media || [];\n\n  mediaList.forEach((media, index) => {\n    results.push({\n      json: {\n        originalId: item.json.notion_page_id,\n        mediaUrl: media,\n        name: item.json.name,\n        seq: index,\n        post_content: item.json.post_content,\n        url: item.json.url\n      }\n    });\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        320
+      ],
+      "id": "c23b9bcc-f081-4247-a315-a64cd70fb087",
+      "name": "get media list"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gettr.com/api/u/post",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-app-auth",
+              "value": "={{ $json.gettr_post_auth }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $json.gettr_post_data }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        320
+      ],
+      "id": "b5988f05-8107-4089-bd56-2e41dd4a8488",
+      "name": "Post to Gettr w/ Media"
+    },
+    {
+      "parameters": {
+        "jsCode": "const aggregated = {};\nconst uploadResults = $input.all();\nconst mediaListItems = $items(\"get media list\");\n\n// The `upload media` node is in \"each\" mode, so the output items correspond by index\n// to the input items from \"get media list\". We can correlate them by index.\n\nfor (const [index, uploadResultItem] of uploadResults.entries()) {\n  // Find the corresponding item from the node that produced `originalId`.\n  const sourceItem = mediaListItems[index];\n\n  if (!sourceItem) {\n    // Should not happen if item counts match\n    continue;\n  }\n\n  const json = sourceItem.json;\n  const originalId = json.originalId;\n\n  if (!originalId) {\n    continue;\n  }\n\n  if (!aggregated[originalId]) {\n    aggregated[originalId] = {\n      post_content: json.post_content,\n      url: json.url,\n      media: []\n    };\n  }\n\n  // The result from the upload is in `uploadResultItem.json`\n  const uploadJson = uploadResultItem.json;\n\n  if (uploadJson?.media_info?.ori) {\n    aggregated[originalId].media.push({      \n      ...uploadJson.media_info,\n      seq: json.seq // seq comes from the source item\n    });\n  }\n}\n\nconst resultItems = [];\nfor (const id in aggregated) {\n  const post = aggregated[id];\n  post.media.sort((a, b) => a.seq - b.seq);\n  resultItems.push({\n    json: {\n      originalId: id,\n      post_content: post.post_content,\n      url: post.url,\n      media: post.media\n    }\n  });\n}\n\nreturn resultItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        320
+      ],
+      "id": "44e4082b-4d91-433e-bb2b-0288bacd3499",
+      "name": "Agg By Post"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "416da45e-e4b9-41c4-96e3-93cc827c1f02",
+              "leftValue": "={{ $json?.media?.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        480
+      ],
+      "id": "7f64880e-d3cd-4c0f-affe-b921d0161273",
+      "name": "with media?"
+    },
+    {
+      "parameters": {},
+      "name": "Already Posted - Skip1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        896
+      ],
+      "id": "29d28e88-6d35-4c62-ab09-edc8c257a34c"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "aaa54f72-941d-4e65-b6a2-b05008306373",
+              "leftValue": "={{ $json.metadata.imageUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        624
+      ],
+      "id": "ce1091cd-25b0-4fa8-9fe8-9f595ddcc8d9",
+      "name": "If no preview link?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        624,
+        528
+      ],
+      "id": "af090abc-f3b3-40eb-9b62-38d15852a189",
+      "name": "No media No post"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  n8n Code node\n  detect video elements\n  Fix: media array里第一个不一定是video类型\n  Fix: 处理所有输入items而不只是第一个\n*/\n\nconst items = $input.all();\n\nreturn items.map(item => {\n  const { post_content, media } = item.json;\n\n  // Find the first video element in media array (identified by having m3u8 property)\n  const videoIndex = media?.findIndex(item => item.m3u8) ?? -1;\n  const videoElement = videoIndex >= 0 ? media[videoIndex] : null;\n  const imgs = media?.length > 0 ? media.filter(item => !item.m3u8).map(item => item.screen || item.ori) : [];\n  \n  const postData = {\n    data: {\n      _t: \"post\",\n      acl: { _t: \"acl\" },\n      txt: `${post_content}`.trim(),\n      udate: Date.now(),\n      cdate: Date.now(),\n      uid: $('config').first().json.pub_post_author_id,\n      // Only include images (non-video items) in imgs array\n      imgs: imgs,\n      // Use video element metadata if video exists, otherwise use first media element or null\n      // image width and height needed when only one image attached in this post    \n      main: videoElement ? (videoElement.screen || videoElement.ori) : (media?.[0]?.screen || media?.[0]?.ori || null),\n      vid: videoElement?.m3u8 || null,\n      ovid: videoElement?.nm_uri || null,\n      pvid: videoElement?.m3u8 || null,\n      nmvid: videoElement?.nm_uri || null,\n      vid_dur: videoElement?.duration || null,\n      vid_wid: videoElement?.width || (imgs?.length === 1 ? media?.[0].im_width : null) || null,\n      vid_hgt: videoElement?.height || (imgs?.length === 1 ? media?.[0]?.im_height : null) || null\n    },\n    aux: null,\n    serial: \"post\"\n  };\n\n  const auth = {\n    user: $(\"config\").first().json.pub_post_author_id, \n    token: $('config').first().json.pub_post_author_token\n  };\n\n  return { \n    gettr_post_data: JSON.stringify(postData),\n    gettr_post_auth: JSON.stringify(auth) \n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        320
+      ],
+      "id": "ae8b975c-8d82-4811-8805-99d4a2b04c06",
+      "name": "Prepare Gettr Post"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "media",
+              "type": "array"
+            },
+            {
+              "name": "post_content"
+            },
+            {
+              "name": "notion_page_id"
+            },
+            {
+              "name": "published_at"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1888,
+        880
+      ],
+      "id": "5056b482-9a3a-4f10-9081-09b230559315",
+      "name": "start"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"redis_key_prefix\": \"newsroom:dailynews:post:\",\n  \"pub_post_author_id\": \"dailynews\",\n  \"pub_post_author_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkYWlseW5ld3MiLCJ1c2VybmFtZSI6ImRhaWx5bmV3cyIsImxldmVsIjo0LCJndmVyIjoiMkU2NTkxOEYiLCJjdmVyIjoiNjY2ODhMIiwiaWF0IjoxNzUyODUyOTk4LCJleHAiOjIwNjgyMTI5OTh9.P45jyUUX4MtdRQqUvdvguVaPRAGz5j3p9y3BA4DCcsw\"\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1568,
+        880
+      ],
+      "id": "81de0d2d-1589-43de-be80-4bda6ba6b7fd",
+      "name": "config"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check Redis": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Not Posted Before?": {
+      "main": [
+        [
+          {
+            "node": "with media?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mark Posted in Redis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Already Posted - Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Gettr": {
+      "main": [
+        []
+      ]
+    },
+    "Mark Posted in Redis": {
+      "main": [
+        [
+          {
+            "node": "Already Posted - Skip1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Not Posted Before?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "If no preview link?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "clean_post_data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gettr Post w/o Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get preview data": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Cal Post Hash": {
+      "main": [
+        [
+          {
+            "node": "Check Redis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "upload media": {
+      "main": [
+        [
+          {
+            "node": "Agg By Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get media list": {
+      "main": [
+        [
+          {
+            "node": "upload media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Gettr w/ Media": {
+      "main": [
+        []
+      ]
+    },
+    "Agg By Post": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gettr Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gettr Post w/o Media": {
+      "main": [
+        [
+          {
+            "node": "Post to Gettr",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "with media?": {
+      "main": [
+        [
+          {
+            "node": "get media list",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "get preview data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If no preview link?": {
+      "main": [
+        [
+          {
+            "node": "No media No post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "clean_post_data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gettr Post": {
+      "main": [
+        [
+          {
+            "node": "Post to Gettr w/ Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "start": {
+      "main": [
+        [
+          {
+            "node": "config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "config": {
+      "main": [
+        [
+          {
+            "node": "Cal Post Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "o8fJi28bhPtWuusr"
+  },
+  "versionId": "cb419e12-c838-491f-a941-2193bcb89f21",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "pxySqcRGdXdwuGlg",
+  "tags": [
+    {
+      "updatedAt": "2025-07-21T15:12:28.140Z",
+      "createdAt": "2025-07-21T15:12:28.140Z",
+      "id": "Jug2J6mMV100UtCp",
+      "name": "DAILYNEWS"
+    },
+    {
+      "updatedAt": "2025-07-05T03:21:24.203Z",
+      "createdAt": "2025-07-05T03:21:24.203Z",
+      "id": "KPWthcboPhh3rAk4",
+      "name": "PRODUCTION"
+    }
+  ]
+}

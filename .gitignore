@@ -1,0 +1,18 @@
+# Credentials
+config.yaml
+
+# Runtime data
+logs/
+data/
+
+# Python
+.env
+*.pyc
+__pycache__/
+
+# Misc
+node_modules/
+.DS_Store
+
+# Local tooling, not project code
+micro

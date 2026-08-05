@@ -1,0 +1,5 @@
+# transient render artifacts written by generate.py
+output_*.png
+_source_*.jpg
+__pycache__/
+*.pyc

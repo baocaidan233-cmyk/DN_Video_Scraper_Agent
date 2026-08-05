@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title x-ignore>__PIPELINE_TITLE__ — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+
+    /* Node running pulse ring */
+    @keyframes nodeRing { 0%,100%{opacity:.6;transform:scale(1)} 50%{opacity:0;transform:scale(1.15)} }
+    .node-ring { animation: nodeRing 1.2s ease-in-out infinite; }
+
+    /* Arrow line flow animation */
+    @keyframes arrowFlow { from{stroke-dashoffset:12} to{stroke-dashoffset:0} }
+    .arrow-flow { animation: arrowFlow .5s linear infinite; }
+
+    ::-webkit-scrollbar { width:5px; height:5px }
+    ::-webkit-scrollbar-track { background:#111827 }
+    ::-webkit-scrollbar-thumb { background:#374151; border-radius:3px }
+  </style>
+</head>
+
+<body class="bg-gray-950 text-gray-100 min-h-screen" x-data="app()" x-init="init()" x-cloak>
+
+<!-- ------------------------------------------------------------------ -->
+<!-- Header                                                              -->
+<!-- ------------------------------------------------------------------ -->
+<header class="bg-gray-900 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <span class="text-base font-bold text-white" x-text="pipelineHeader"></span>
+    <span class="text-xs text-gray-500">Admin</span>
+  </div>
+  <div class="flex items-center gap-4 text-xs">
+    <span class="text-gray-500">
+      Review <span class="font-bold text-yellow-400" x-text="hb.review_queue_len ?? '—'"></span>
+      &nbsp;·&nbsp; Publish <span class="font-bold text-green-400" x-text="hb.publish_queue_len ?? '—'"></span>
+    </span>
+    <span class="text-gray-600">
+      <span x-text="pipelineType==='epicfury' ? 'Scrape' : 'RSS'"></span> <span x-show="!hb.rss_paused" x-text="fmtSecs(hb.next_rss_in_s)">—</span>
+      <span x-show="hb.rss_paused" class="text-orange-400">paused</span>
+      &nbsp;·&nbsp; Pub <span x-text="fmtSecs(hb.next_publish_in_s)">—</span>
+    </span>
+    <div class="flex items-center gap-1.5">
+      <div class="w-1.5 h-1.5 rounded-full" :class="sseConnected?'bg-green-400 animate-pulse':'bg-red-500'"></div>
+      <span class="text-gray-600" x-text="sseConnected?'live':'offline'"></span>
+    </div>
+    <a href="/logout" class="text-gray-600 hover:text-white transition">Sign out</a>
+  </div>
+</header>
+
+<!-- ------------------------------------------------------------------ -->
+<!-- Navigation                                                          -->
+<!-- ------------------------------------------------------------------ -->
+<nav class="bg-gray-900 border-b border-gray-800 px-4 flex gap-1">
+  <template x-for="t in tabs" :key="t.id">
+    <button @click="tab=t.id"
+      x-show="(!t.rssOnly || pipelineType !== 'epicfury') && (!t.epicfuryOnly || pipelineType === 'epicfury')"
+      :class="tab===t.id ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'"
+      class="px-4 py-2 text-sm font-medium transition focus:outline-none"
+      x-text="t.label">
+    </button>
+  </template>
+</nav>
+
+<!-- Alert banner -->
+<div x-show="alerts.length>0" class="bg-red-900/80 border-b border-red-700 px-4 py-2 space-y-1">
+  <template x-for="(a,i) in alerts" :key="i">
+    <div class="flex items-center justify-between text-sm text-red-200">
+      <span>⚠ <span x-text="a.message"></span></span>
+      <button @click="alerts.splice(i,1)" class="text-red-400 hover:text-white ml-4">✕</button>
+    </div>
+  </template>
+</div>
+
+<!-- ================================================================== -->
+<!-- Main content                                                        -->
+<!-- ================================================================== -->
+<main class="p-4 max-w-screen-2xl mx-auto space-y-4">
+
+  <!-- ================================================================ -->
+  <!-- TAB: Pipeline                                                     -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='pipeline'" class="space-y-4">
+
+    <!-- Trigger buttons + Auto-pilot -->
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold text-white">Pipeline</h2>
+      <div class="flex items-center gap-3">
+
+        <!-- Auto-pilot toggle -->
+        <button @click="toggleAutopilot"
+          :class="autopilot
+            ? 'bg-amber-600 hover:bg-amber-500 border-amber-400 text-white'
+            : 'bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300'"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded border transition">
+          <span x-text="autopilot ? '🤖 Auto-Pilot ON' : '🤖 Auto-Pilot'"></span>
+        </button>
+
+        <!-- AI video fallback toggle. Shown on every dashboard: config-driven
+             channels report pipelineType 'epicfury', so x-show cannot tell them
+             apart from EpicFury. -->
+        <button @click="toggleVideoGen"
+          :class="videoGenEnabled
+            ? 'bg-purple-700 hover:bg-purple-600 border-purple-500 text-white'
+            : 'bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300'"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded border transition"
+          :title="videoGenMax24h > 0
+            ? `AI video for posts with no usable image — ${videoGenUsed24h}/${videoGenMax24h} used in the last 24h`
+            : 'Set a per-24h cap in Settings before videos can be generated'">
+          <span x-text="videoGenEnabled
+            ? `🎬 AI Video ${videoGenUsed24h}/${videoGenMax24h}`
+            : '🎬 AI Video'"></span>
+        </button>
+
+        <!-- Verify step toggle (DailyNews only) -->
+        <button x-show="pipelineType === 'rss'" @click="toggleVerify"
+          :class="verifyEnabled
+            ? 'bg-emerald-700 hover:bg-emerald-600 border-emerald-500 text-white'
+            : 'bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-400'"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded border transition">
+          <span x-text="verifyEnabled ? '✅ Verify ON' : '⬜ Verify OFF'"></span>
+        </button>
+
+        <button x-show="!rssRunning" @click="triggerRun('rss')" :disabled="!!triggering"
+          :class="pipelineType==='epicfury' ? 'px-4 py-1.5 w-24' : 'px-3 py-1.5'"
+          class="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white text-sm rounded transition"
+          x-text="triggering==='rss' ? 'Triggering…' : (pipelineType==='epicfury' ? '▶ Scrape' : '▶ Run RSS')"></button>
+        <button x-show="rssRunning" @click="stopRun('rss')"
+          class="px-3 py-1.5 bg-red-800 hover:bg-red-700 text-white text-sm rounded transition"
+          x-text="pipelineType==='epicfury' ? '⏹ Stop Scrape' : '⏹ Stop RSS'"></button>
+        <button x-show="!publishRunning" @click="triggerRun('publish')" :disabled="!!triggering"
+          class="px-3 py-1.5 bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm rounded transition"
+          x-text="triggering==='publish' ? 'Triggering…' : '▶ Run Publish'"></button>
+        <button x-show="publishRunning" @click="stopRun('publish')"
+          class="px-3 py-1.5 bg-red-800 hover:bg-red-700 text-white text-sm rounded transition">⏹ Stop Publish</button>
+      </div>
+    </div>
+
+    <!-- Ingestion Pipeline -->
+    <div class="bg-gray-900 rounded-xl p-4">
+      <p class="text-[11px] uppercase tracking-widest text-gray-600 mb-3" x-text="pipelineType==='epicfury' ? 'X + Web Scraping' : 'RSS Ingestion'"></p>
+      <div class="overflow-x-auto pb-1">
+        <div class="flex items-center gap-0 min-w-max">
+          <template x-for="(node, i) in rssNodes" :key="node.id">
+            <div class="flex items-center">
+              <!-- Node box -->
+              <div class="relative w-[68px] h-[52px] rounded-lg border-2 flex flex-col items-center justify-center gap-0.5 cursor-default select-none"
+                   :class="nodeBoxCls(node.id)"
+                   :title="nodeTooltip(node.id)">
+                <!-- Pulse ring when running -->
+                <div x-show="nodeStatus[node.id]==='running'"
+                     class="node-ring absolute inset-[-3px] rounded-xl border-2 border-blue-400 pointer-events-none"></div>
+                <span class="text-[10px] font-semibold text-center leading-tight px-1"
+                      :class="nodeLabelCls(node.id)"
+                      x-text="node.label"></span>
+                <span class="text-[8px] font-mono"
+                      :class="nodeCounterCls(node.id)"
+                      x-text="nodeCounterTxt(node.id)"></span>
+              </div>
+              <!-- Arrow -->
+              <template x-if="i < rssNodes.length-1">
+                <div class="flex items-center w-5 shrink-0">
+                  <div class="flex-1 h-[2px]" :class="arrowLineCls(rssNodes[i+1].id)"></div>
+                  <svg width="6" height="9" viewBox="0 0 6 9" class="shrink-0">
+                    <polygon points="0,0 6,4.5 0,9" :fill="arrowFillCol(rssNodes[i+1].id)"/>
+                  </svg>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Publish Pipeline -->
+    <div class="bg-gray-900 rounded-xl p-4">
+      <p class="text-[11px] uppercase tracking-widest text-gray-600 mb-3">Publish Cycle</p>
+      <div class="overflow-x-auto pb-1">
+        <div class="flex items-center gap-0 min-w-max">
+          <template x-for="(node, i) in pubNodes" :key="node.id">
+            <div class="flex items-center">
+              <div class="relative w-[68px] h-[52px] rounded-lg border-2 flex flex-col items-center justify-center gap-0.5 cursor-default select-none"
+                   :class="nodeBoxCls(node.id)"
+                   :title="nodeTooltip(node.id)">
+                <div x-show="nodeStatus[node.id]==='running'"
+                     class="node-ring absolute inset-[-3px] rounded-xl border-2 border-blue-400 pointer-events-none"></div>
+                <span class="text-[10px] font-semibold text-center leading-tight px-1"
+                      :class="nodeLabelCls(node.id)"
+                      x-text="node.label"></span>
+                <span class="text-[8px] font-mono"
+                      :class="nodeCounterCls(node.id)"
+                      x-text="nodeCounterTxt(node.id)"></span>
+              </div>
+              <template x-if="i < pubNodes.length-1">
+                <div class="flex items-center w-5 shrink-0">
+                  <div class="flex-1 h-[2px]" :class="arrowLineCls(pubNodes[i+1].id)"></div>
+                  <svg width="6" height="9" viewBox="0 0 6 9" class="shrink-0">
+                    <polygon points="0,0 6,4.5 0,9" :fill="arrowFillCol(pubNodes[i+1].id)"/>
+                  </svg>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schedule controls -->
+    <div class="bg-gray-900 rounded-xl p-4 space-y-4">
+      <p class="text-[11px] uppercase tracking-widest text-gray-600">Schedule</p>
+
+      <!-- Row 1: RSS / Scrape Interval -->
+      <div class="flex flex-wrap gap-6 items-end border-b border-gray-800 pb-4">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">
+            <span x-text="pipelineType==='epicfury' ? 'Scrape Interval' : 'RSS Interval'"></span>
+            <span class="text-gray-600 ml-1">(currently <span x-text="scheduleForm.rss_interval_min"></span>m)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="1" max="120" step="1"
+                   x-model.number="scheduleForm.rss_interval_min"
+                   :disabled="scheduleForm.rss_paused"
+                   class="accent-blue-500 disabled:opacity-40 w-40">
+            <span class="text-sm text-white w-10" x-text="scheduleForm.rss_interval_min + 'm'"></span>
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs text-gray-400" x-text="pipelineType==='epicfury' ? 'Scrape' : 'RSS'"></label>
+          <button @click="toggleRssPause"
+                  :class="scheduleForm.rss_paused
+                    ? 'bg-orange-700 hover:bg-orange-600 border-orange-500'
+                    : 'bg-gray-700 hover:bg-gray-600 border-gray-600'"
+                  class="px-3 py-1.5 text-sm rounded border transition flex items-center gap-1.5">
+            <span x-text="scheduleForm.rss_paused ? '▶ Resume' : '⏸ Pause'"></span>
+          </button>
+        </div>
+        <div class="flex items-center gap-3">
+          <button @click="saveRssSchedule"
+                  class="px-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-sm rounded transition">
+            Apply
+          </button>
+          <span x-show="rssSaved" class="text-green-400 text-xs">✓ Saved</span>
+          <span x-show="rssError" class="text-red-400 text-xs" x-text="rssError"></span>
+        </div>
+      </div>
+
+      <!-- Row 2: Publish Interval -->
+      <div class="flex flex-wrap gap-6 items-end border-b border-gray-800 pb-4">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">
+            Publish Interval
+            <span class="text-gray-600 ml-1">(currently <span x-text="scheduleForm.publish_interval_min"></span>m)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="1" max="120" step="1"
+                   x-model.number="scheduleForm.publish_interval_min"
+                   :disabled="scheduleForm.publish_paused"
+                   class="accent-purple-500 disabled:opacity-40 w-40">
+            <span class="text-sm text-white w-10" x-text="scheduleForm.publish_interval_min + 'm'"></span>
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs text-gray-400">Publish</label>
+          <button @click="togglePublishPause"
+                  :class="scheduleForm.publish_paused
+                    ? 'bg-orange-700 hover:bg-orange-600 border-orange-500'
+                    : 'bg-gray-700 hover:bg-gray-600 border-gray-600'"
+                  class="px-3 py-1.5 text-sm rounded border transition flex items-center gap-1.5">
+            <span x-text="scheduleForm.publish_paused ? '▶ Resume' : '⏸ Pause'"></span>
+          </button>
+        </div>
+        <div class="flex items-center gap-3">
+          <button @click="savePublishSchedule"
+                  class="px-4 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded transition">
+            Apply
+          </button>
+          <span x-show="publishSaved" class="text-green-400 text-xs">✓ Saved</span>
+          <span x-show="publishError" class="text-red-400 text-xs" x-text="publishError"></span>
+        </div>
+      </div>
+
+      <!-- Row 3: Filter Score Threshold -->
+      <div class="flex flex-wrap gap-6 items-end border-b border-gray-800 pb-4">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">
+            Filter Score Threshold
+            <span class="text-gray-600 ml-1">(min score to enqueue for review)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="1" max="10" step="0.5"
+                   x-model.number="scheduleForm.filter_score_threshold"
+                   class="accent-yellow-500 w-40">
+            <span class="text-sm text-white w-10" x-text="scheduleForm.filter_score_threshold"></span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button @click="saveFilterScore"
+                  class="px-4 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white text-sm rounded transition">
+            Apply
+          </button>
+          <span x-show="scoreSaved" class="text-green-400 text-xs">✓ Saved</span>
+          <span x-show="scoreError" class="text-red-400 text-xs" x-text="scoreError"></span>
+        </div>
+      </div>
+
+      <!-- Row 3b: AI video fallback cap -->
+      <div class="flex flex-wrap gap-6 items-end border-b border-gray-800 pb-4">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">
+            AI Videos per 24h
+            <span class="text-gray-600 ml-1">(posts with no usable image; 0 = off)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0" max="24" step="1"
+                   x-model.number="scheduleForm.video_gen_max_24h"
+                   class="accent-purple-500 w-40">
+            <span class="text-sm text-white w-8" x-text="scheduleForm.video_gen_max_24h"></span>
+            <span class="text-xs text-gray-500"
+                  x-text="`${videoGenUsed24h} used in the last 24h`"></span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button @click="saveVideoGen"
+                  class="px-4 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded transition">
+            Apply
+          </button>
+          <span x-show="videoSaved" class="text-green-400 text-xs">✓ Saved</span>
+          <span x-show="videoError" class="text-red-400 text-xs" x-text="videoError"></span>
+          <span x-show="videoGenEnabled && scheduleForm.video_gen_max_24h === 0"
+                class="text-amber-400 text-xs">
+            Switch is ON but the cap is 0 — no videos will be generated
+          </span>
+        </div>
+      </div>
+
+      <!-- Row 4: Dedup Thresholds -->
+      <div class="flex flex-wrap gap-6 items-end">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">
+            Within-Batch Dedup
+            <span class="text-gray-600 ml-1">(same cycle, drop if ≥ threshold)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0.50" max="0.99" step="0.01"
+                   x-model.number="scheduleForm.within_batch_threshold"
+                   class="accent-teal-500 w-40">
+            <span class="text-sm text-white w-12" x-text="scheduleForm.within_batch_threshold.toFixed(2)"></span>
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">
+            Cross-Batch Dedup
+            <span class="text-gray-600 ml-1">(vs Qdrant 48h, drop if ≥ threshold)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0.50" max="0.99" step="0.01"
+                   x-model.number="scheduleForm.cross_batch_threshold"
+                   class="accent-cyan-500 w-40">
+            <span class="text-sm text-white w-12" x-text="scheduleForm.cross_batch_threshold.toFixed(2)"></span>
+          </div>
+        </div>
+        <div x-show="pipelineType !== 'epicfury'">
+          <label class="text-xs text-gray-400 block mb-1">
+            Notion Queue Dedup
+            <span class="text-gray-600 ml-1">(vs queued articles 24h, drop if ≥ threshold)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="range" min="0.50" max="0.99" step="0.01"
+                   x-model.number="scheduleForm.notion_dedup_threshold"
+                   class="accent-purple-500 w-40">
+            <span class="text-sm text-white w-12" x-text="scheduleForm.notion_dedup_threshold.toFixed(2)"></span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button @click="saveDedupThresholds"
+                  class="px-4 py-1.5 bg-teal-700 hover:bg-teal-600 text-white text-sm rounded transition">
+            Apply
+          </button>
+          <span x-show="dedupSaved" class="text-green-400 text-xs">✓ Saved</span>
+          <span x-show="dedupError" class="text-red-400 text-xs" x-text="dedupError"></span>
+        </div>
+      </div>
+
+      <!-- Row 5: X Scraper Switch (EpicFury only) -->
+      <div x-show="pipelineType === 'epicfury'" class="flex flex-wrap gap-6 items-end border-t border-gray-800 pt-4">
+        <div>
+          <label class="text-xs text-gray-400 block mb-2">X / Twitter Scraper</label>
+          <div class="flex items-center gap-2">
+            <button @click="setXScraper('twitterapi')"
+              :class="xScraper === 'twitterapi'
+                ? 'bg-blue-700 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'"
+              class="px-4 py-1.5 text-sm rounded border transition">
+              twitterapi.io
+            </button>
+            <button @click="setXScraper('socialdata')"
+              :class="xScraper === 'socialdata'
+                ? 'bg-indigo-700 border-indigo-500 text-white'
+                : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'"
+              class="px-4 py-1.5 text-sm rounded border transition">
+              socialdata.tools
+            </button>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 self-end">
+          <span x-show="scraperSaved" class="text-green-400 text-xs">✓ Saved</span>
+          <span x-show="scraperError" class="text-red-400 text-xs" x-text="scraperError"></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: History                                                      -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='history'" class="space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold">Execution History</h2>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-500" x-text="`${historyTotal} total runs`"></span>
+        <button @click="loadHistory()" class="text-xs text-blue-400 hover:text-blue-300">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-500 text-xs border-b border-gray-800">
+            <th class="pb-2 pr-4">Run ID</th>
+            <th class="pb-2 pr-4">Type</th>
+            <th class="pb-2 pr-4">Trigger</th>
+            <th class="pb-2 pr-4">Started</th>
+            <th class="pb-2 pr-4">Duration</th>
+            <th class="pb-2 pr-4">Status</th>
+            <th class="pb-2 pr-4">📨 Cards</th>
+            <th class="pb-2">Steps</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="history.length===0">
+            <tr><td colspan="6" class="py-6 text-center text-gray-600 text-sm">No runs yet</td></tr>
+          </template>
+          <template x-for="run in history" :key="run.run_id">
+            <tr class="border-b border-gray-800/40 hover:bg-gray-900/40 cursor-pointer"
+                @click="expandedRun = expandedRun===run.run_id ? null : run.run_id">
+              <td class="py-1.5 pr-4 font-mono text-xs text-gray-500" x-text="run.run_id"></td>
+              <td class="py-1.5 pr-4">
+                <span :class="run.run_type==='rss'?'text-blue-400':'text-green-400'" x-text="run.run_type"></span>
+              </td>
+              <td class="py-1.5 pr-4">
+                <span :class="run.run_id.startsWith('manual-') ? 'text-yellow-400' : 'text-gray-500'"
+                      x-text="run.run_id.startsWith('manual-') ? 'manual' : 'auto'"></span>
+              </td>
+              <td class="py-1.5 pr-4 text-gray-400 text-xs" x-text="fmtDate(run.started_at)"></td>
+              <td class="py-1.5 pr-4 text-gray-400 text-xs" x-text="fmtDuration(run.started_at,run.ended_at)"></td>
+              <td class="py-1.5 pr-4">
+                <span :class="{
+                  'text-green-400':run.status==='success',
+                  'text-red-400':run.status==='failed',
+                  'text-yellow-400':run.status==='running',
+                  'text-gray-400':true
+                }" x-text="run.status"></span>
+              </td>
+              <td class="py-1.5 pr-4 text-xs" x-text="(run.steps?.find(s=>s.step_name==='telegram_enqueue')?.articles_out ?? '—')"></td>
+              <td class="py-1.5 text-xs text-gray-600" x-text="run.steps?.length+' steps'"></td>
+            </tr>
+            <tr x-show="expandedRun===run.run_id" class="bg-gray-900/30">
+              <td colspan="8" class="px-4 py-3">
+                <template x-if="run.steps?.length">
+                  <table class="w-full text-xs">
+                    <thead>
+                      <tr class="text-gray-600">
+                        <th class="text-left pb-1">Step</th>
+                        <th class="text-right pb-1">In</th>
+                        <th class="text-right pb-1">Out</th>
+                        <th class="text-right pb-1">Dropped</th>
+                        <th class="text-right pb-1">ms</th>
+                        <th class="text-left pb-1 pl-4">Error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template x-for="s in run.steps" :key="s.id">
+                        <tr class="border-t border-gray-800/20">
+                          <td class="py-0.5 text-gray-300" x-text="s.step_name"></td>
+                          <td class="py-0.5 text-right text-gray-400" x-text="s.articles_in"></td>
+                          <td class="py-0.5 text-right text-green-400" x-text="s.articles_out"></td>
+                          <td class="py-0.5 text-right text-yellow-500" x-text="s.articles_dropped"></td>
+                          <td class="py-0.5 text-right text-gray-500" x-text="s.duration_ms"></td>
+                          <td class="py-0.5 pl-4 text-red-400" x-text="s.error_msg||''"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </template>
+                <template x-if="!run.steps?.length">
+                  <p class="text-gray-600 text-xs">No step data recorded</p>
+                </template>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-between text-xs text-gray-500 pt-1">
+      <span x-text="`Page ${historyPage+1} of ${historyTotalPages}`"></span>
+      <div class="flex items-center gap-1">
+        <button @click="loadHistory(0)" :disabled="historyPage===0"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">«</button>
+        <button @click="loadHistory(historyPage-1)" :disabled="historyPage===0"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">‹ Prev</button>
+        <button @click="loadHistory(historyPage+1)" :disabled="historyPage>=historyTotalPages-1"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">Next ›</button>
+        <button @click="loadHistory(historyTotalPages-1)" :disabled="historyPage>=historyTotalPages-1"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">»</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: Queue                                                        -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='queue'" class="space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold">Review Queue (<span x-text="queueItems.length"></span>)</h2>
+      <button @click="loadQueue" class="text-xs text-blue-400 hover:text-blue-300">↻ Refresh</button>
+    </div>
+    <p x-show="queueItems.length===0" class="text-gray-600 text-sm">Queue is empty</p>
+    <div class="grid gap-3 md:grid-cols-2">
+      <template x-for="item in queueItems" :key="item.article_id">
+        <div class="bg-gray-900 rounded-xl p-4 flex flex-col gap-2 border border-gray-800">
+          <div class="flex gap-3">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-white truncate" x-text="item.title"></p>
+              <p class="text-xs text-gray-500 mt-0.5" x-text="(item.source||'')+'  ·  '+fmtDate(item.published_at)"></p>
+              <p class="text-xs text-gray-400 mt-1 line-clamp-2" x-text="item.description||''"></p>
+            </div>
+            <div class="shrink-0 text-right">
+              <span class="text-xs font-bold text-yellow-400">⭐ <span x-text="item.llm_score"></span>/5</span>
+              <p class="text-[10px] text-gray-500 mt-0.5" x-text="item.llm_category||''"></p>
+            </div>
+          </div>
+          <p class="text-xs text-blue-300 font-mono line-clamp-3 bg-gray-800/50 rounded p-2" x-text="item.post_content||''"></p>
+          <div class="flex gap-2">
+            <button @click="queueAction(item.article_id,'approve')"
+                    class="flex-1 py-1 bg-green-800 hover:bg-green-700 text-white text-xs rounded transition">✅ Approve</button>
+            <button @click="queueAction(item.article_id,'reject')"
+                    class="flex-1 py-1 bg-red-900 hover:bg-red-800 text-white text-xs rounded transition">❌ Reject</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: Hot Topics (DailyNews only)                                 -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='hot_topics'" class="space-y-4 max-w-2xl">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-semibold">Hot Topics</h2>
+        <p class="text-xs text-gray-500 mt-0.5">
+          One keyword or phrase per line. Each RSS ingestion picks <strong class="text-white">1 article</strong>:
+          the highest-scored article whose title/description matches any keyword.
+          If no match, the highest-scored article overall is selected.
+        </p>
+      </div>
+    </div>
+
+    <div class="bg-gray-900 rounded-xl border border-gray-800 p-4 space-y-3">
+      <textarea
+        x-model="hotTopicsText"
+        rows="12"
+        placeholder="Enter keywords, one per line&#10;e.g.&#10;iran&#10;nuclear deal&#10;ukraine&#10;federal reserve"
+        class="w-full bg-gray-800 text-gray-100 text-sm font-mono rounded-lg border border-gray-700 p-3 focus:outline-none focus:border-blue-500 resize-y"
+      ></textarea>
+
+      <!-- Semantic threshold -->
+      <div class="flex items-center gap-3 pt-1">
+        <label class="text-xs text-gray-400 w-44 shrink-0">
+          Semantic similarity threshold
+          <span class="text-gray-600 ml-1">(currently <span x-text="hotTopicsThreshold.toFixed(2)"></span>)</span>
+        </label>
+        <input type="range" min="0.50" max="0.95" step="0.01"
+               x-model.number="hotTopicsThreshold"
+               class="accent-blue-500 w-40">
+        <span class="text-xs text-white w-10" x-text="hotTopicsThreshold.toFixed(2)"></span>
+      </div>
+      <p class="text-xs text-gray-600 -mt-1">
+        Article embeddings are compared against embedded keyword phrases. Matches above this cosine score qualify.
+        Lower = broader; higher = stricter. Default 0.75.
+      </p>
+
+      <div class="flex items-center gap-3">
+        <button @click="saveHotTopics()"
+          class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-sm rounded-lg transition font-medium">
+          Save
+        </button>
+        <span x-show="hotTopicsMsg" :class="hotTopicsMsgOk ? 'text-green-400' : 'text-red-400'"
+          class="text-xs" x-text="hotTopicsMsg"></span>
+      </div>
+
+      <p class="text-xs text-gray-600">
+        Matching uses both keyword substring search <em>and</em> semantic embedding similarity (union).
+        Changes take effect on the next RSS ingestion run.
+      </p>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: Sources                                                      -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='sources'" class="space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <h2 class="text-base font-semibold">Sources</h2>
+        <span x-show="sourcesLocked" class="text-xs text-gray-500">🔒 Read-only</span>
+        <span x-show="!sourcesLocked" class="text-xs text-green-400">✏️ Editing</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span x-show="sourcesMsg" :class="sourcesMsgOk?'text-green-400':'text-red-400'" class="text-xs" x-text="sourcesMsg"></span>
+        <button x-show="sourcesLocked" @click="sourcesLocked=false"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded transition">✏️ Edit</button>
+        <button x-show="!sourcesLocked" @click="saveSources"
+                class="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-sm rounded transition">💾 Save</button>
+        <button x-show="!sourcesLocked" @click="sourcesLocked=true; loadSources()"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded transition">Cancel</button>
+      </div>
+    </div>
+    <p class="text-xs text-gray-500" x-show="pipelineType !== 'epicfury'">
+      RSS feed URLs, one per line. Optional display name after the URL (space-separated).
+      Lines starting with # are comments. Merged with Notion feeds; changes apply on the next pipeline run.
+    </p>
+    <p class="text-xs text-gray-500" x-show="pipelineType === 'epicfury'">
+      X accounts (<code>@handle</code>) and website URLs (<code>https://...</code>), one per line.
+      Lines starting with # are comments. Changes apply on the next scrape run.
+    </p>
+    <div class="bg-gray-900 rounded-xl border border-gray-800">
+      <textarea x-model="sourcesText"
+                :readonly="sourcesLocked"
+                :class="sourcesLocked ? 'text-gray-500 cursor-default' : 'text-blue-300 cursor-text'"
+                class="w-full h-[60vh] bg-transparent font-mono text-xs p-4 resize-none focus:outline-none"
+                spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: Config                                                       -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='config'" class="space-y-3">
+
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <h2 class="text-base font-semibold">Config Editor</h2>
+        <span x-show="configLocked" class="text-xs text-gray-500 flex items-center gap-1">🔒 Read-only</span>
+        <span x-show="!configLocked" class="text-xs text-green-400 flex items-center gap-1">✏️ Editing</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span x-show="configMsg" :class="configMsgOk?'text-green-400':'text-red-400'" class="text-xs" x-text="configMsg"></span>
+        <button @click="reloadConfigFromDisk"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded transition">🔄 Reload from disk</button>
+        <button x-show="configLocked" @click="configLocked=false; loadConfig(true)"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded transition">✏️ Edit</button>
+        <button x-show="!configLocked" @click="saveConfig"
+                class="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-sm rounded transition">💾 Save</button>
+        <button x-show="!configLocked" @click="configLocked=true;loadConfig(false)"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded transition">Cancel</button>
+      </div>
+    </div>
+    <div class="bg-gray-900 rounded-xl border border-gray-800 overflow-auto h-[62vh]">
+      <!-- Locked view: unselectable, secrets blurred -->
+      <pre x-show="configLocked"
+           class="font-mono text-xs p-4 text-gray-400 select-none pointer-events-none whitespace-pre-wrap break-all"
+           style="user-select:none;-webkit-user-select:none;"
+           x-html="configText.split('\n').map(l => l.includes('***REDACTED***')
+             ? `<span style='filter:blur(4px)'>${l.replace(/</g,'&lt;')}</span>`
+             : l.replace(/</g,'&lt;')).join('\n')"></pre>
+      <!-- Edit view: textarea with masked values -->
+      <textarea x-show="!configLocked"
+                x-model="configText"
+                class="w-full h-full bg-transparent font-mono text-xs p-4 resize-none focus:outline-none text-green-300 cursor-text"
+                spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: Prompts                                                      -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='prompts'" class="space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <h2 class="text-base font-semibold">Prompt Editor</h2>
+        <span x-show="promptsLocked" class="text-xs text-gray-500">🔒 Read-only</span>
+        <span x-show="!promptsLocked" class="text-xs text-green-400">✏️ Editing</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span x-show="promptMsg" :class="promptMsgOk?'text-green-400':'text-red-400'" class="text-xs" x-text="promptMsg"></span>
+        <button x-show="promptsLocked" @click="promptsLocked=false"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded transition">✏️ Edit</button>
+        <button x-show="!promptsLocked && selectedPrompt" @click="savePrompt"
+                class="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-sm rounded transition">💾 Save</button>
+        <button x-show="!promptsLocked" @click="promptsLocked=true"
+                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-sm rounded transition">Cancel</button>
+      </div>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <template x-for="name in promptFiles" :key="name">
+        <button @click="loadPrompt(name)"
+                :class="selectedPrompt===name ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                class="px-3 py-1 text-sm rounded transition" x-text="name"></button>
+      </template>
+    </div>
+    <template x-if="selectedPrompt">
+      <div class="bg-gray-900 rounded-xl border border-gray-800">
+        <textarea x-model="promptText"
+                  :readonly="promptsLocked"
+                  :class="promptsLocked ? 'text-gray-500 cursor-default' : 'text-blue-300 cursor-text'"
+                  class="w-full h-[56vh] bg-transparent font-mono text-xs p-4 resize-none focus:outline-none"
+                  spellcheck="false"></textarea>
+      </div>
+    </template>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: Health                                                       -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='health'" class="space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold">API Health</h2>
+      <button @click="checkHealth" :disabled="healthLoading"
+              class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-sm rounded transition"
+              x-text="healthLoading ? 'Checking…' : '↻ Check Now'"></button>
+    </div>
+    <p x-show="!healthData" class="text-gray-600 text-sm">Click "Check Now" to run health checks.</p>
+    <div x-show="healthData" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <template x-for="[name, result] in Object.entries(healthData||{}).filter(([k])=>k!=='overall')" :key="name">
+        <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-medium text-sm capitalize" x-text="name"></span>
+            <div class="w-2.5 h-2.5 rounded-full" :class="result.status==='ok'?'bg-green-400':'bg-red-500'"></div>
+          </div>
+          <p class="text-xs text-gray-500">
+            <span x-text="result.status"></span>
+            <template x-if="result.latency_ms!=null"> · <span x-text="result.latency_ms+'ms'"></span></template>
+          </p>
+          <p x-show="result.error" class="text-xs text-red-400 mt-1 truncate" x-text="result.error"></p>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB: Logs                                                         -->
+  <!-- ================================================================ -->
+  <div x-show="tab==='logs'" class="space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold">Live Log Tail</h2>
+      <div class="flex items-center gap-2">
+        <select x-model="logFilter" class="bg-gray-800 text-sm text-gray-300 rounded px-2 py-1">
+          <option value="">All</option>
+          <option value="ERROR">ERROR</option>
+          <option value="WARNING">WARNING</option>
+          <option value="INFO">INFO</option>
+        </select>
+        <button @click="logs=[];logsPage=0" class="text-xs text-gray-600 hover:text-white">Clear</button>
+      </div>
+    </div>
+    <div class="flex items-center justify-between text-xs text-gray-500">
+      <span x-text="`${filteredLogs.length} entries`"></span>
+      <div class="flex items-center gap-1">
+        <button @click="logsPage=0" :disabled="logsPage===0"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">« First</button>
+        <button @click="logsPage--" :disabled="logsPage===0"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">‹ Prev</button>
+        <span x-text="`Page ${logsPage+1} of ${logsTotalPages}`"></span>
+        <button @click="logsPage++" :disabled="logsPage>=logsTotalPages-1"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">Next ›</button>
+        <button @click="logsPage=logsTotalPages-1" :disabled="logsPage>=logsTotalPages-1"
+                class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30">Latest »</button>
+      </div>
+    </div>
+    <div class="bg-gray-950 rounded-xl p-3 h-[60vh] overflow-y-auto font-mono text-xs" id="log-container">
+      <p x-show="filteredLogs.length===0" class="text-gray-700">Waiting for log events…</p>
+      <template x-for="(line,i) in pagedLogs" :key="i">
+        <div class="py-0.5 flex gap-2">
+          <span class="text-gray-700 shrink-0 w-20" x-text="fmtTime(line.ts)"></span>
+          <span class="shrink-0 w-14" :class="{'text-red-400':line.level==='ERROR','text-yellow-400':line.level==='WARNING','text-blue-400':line.level==='INFO','text-gray-500':true}" x-text="line.level||'INFO'"></span>
+          <span class="text-gray-300 break-all" x-text="line.msg"></span>
+        </div>
+      </template>
+    </div>
+  </div>
+
+</main>
+
+
+<!-- ================================================================== -->
+<!-- Alpine app                                                         -->
+<!-- ================================================================== -->
+<script>
+function app() {
+  return {
+    tab: 'pipeline',
+    tabs: [
+      { id:'pipeline',   label:'Pipeline'    },
+      { id:'history',    label:'History'     },
+      { id:'queue',      label:'Queue'       },
+      { id:'hot_topics', label:'Hot Topics', rssOnly: true },
+      { id:'sources',    label:'Sources',    epicfuryOnly: true },
+      { id:'config',     label:'Config'      },
+      { id:'prompts',    label:'Prompts'     },
+      { id:'health',     label:'Health'      },
+      { id:'logs',       label:'Logs'        },
+    ],
+
+    // SSE
+    sseConnected: false,
+    hb: {},
+    alerts: [],
+
+    // Pipeline nodes
+    nodeStatus: {},
+    nodeCounters: {},
+    triggering: null,
+    rssRunning: false,
+    publishRunning: false,
+    autopilot: false,
+    verifyEnabled: true,
+    xScraper: 'twitterapi',
+    scraperSaved: false,
+    scraperError: '',
+    videoGenEnabled: false,
+    videoGenMax24h: 0,
+    videoGenUsed24h: 0,
+    videoSaved: false,
+    videoError: '',
+    formInitialized: false,
+
+    pipelineType: '__PIPELINE_TYPE__',
+    pipelineHeader: '__PIPELINE_HEADER__',
+
+    rssNodes: '__PIPELINE_TYPE__' === 'epicfury' ? [
+      { id:'sources_fetch',      label:'X + Web'       },
+      { id:'url_dedup',          label:'URL Dedup'     },
+      { id:'embeddings',         label:'Embeddings'    },
+      { id:'within_batch_dedup', label:'Within Batch'  },
+      { id:'cross_batch_dedup',  label:'Cross Batch'   },
+      { id:'claude_score',       label:'Score'         },
+      { id:'post_gen',           label:'Post Gen'      },
+      { id:'telegram_enqueue',   label:'Telegram'      },
+    ] : [
+      { id:'notion_fetch',       label:'Notion'       },
+      { id:'rss_fetch',          label:'RSS Fetch'     },
+      { id:'url_dedup',          label:'URL Dedup'     },
+      { id:'embeddings',         label:'Embeddings'    },
+      { id:'within_batch_dedup', label:'Within Batch'  },
+      { id:'cross_batch_dedup',  label:'Cross Batch'   },
+      { id:'notion_sync',        label:'Queue Sync'    },
+      { id:'notion_dedup',       label:'Queue Dedup'   },
+      { id:'claude_score',       label:'Score'         },
+      { id:'article_select',     label:'Hot Topic'     },
+      { id:'editor_review',      label:'Editor Review' },
+      { id:'post_gen',           label:'Post Gen'      },
+      { id:'verify_post',        label:'Verify'        },
+      { id:'telegram_enqueue',   label:'Telegram'      },
+    ],
+    pubNodes: [
+      { id:'sha1_dedup',   label:'SHA1 Dedup' },
+      { id:'media_upload', label:'Media / OG'  },
+      { id:'gettr_post',   label:'Gettr'       },
+    ],
+
+    // Schedule
+    scheduleForm: { rss_interval_min: 10, publish_interval_min: 60, rss_paused: false, publish_paused: false, filter_score_threshold: 6.0, within_batch_threshold: 0.70, cross_batch_threshold: 0.80, notion_dedup_threshold: 0.80, video_gen_max_24h: 0 },
+    rssSaved: false,
+    rssError: '',
+    publishSaved: false,
+    publishError: '',
+    scoreSaved: false,
+    scoreError: '',
+    dedupSaved: false,
+    dedupError: '',
+
+    // History
+    history: [],
+    historyPage: 0,
+    historyTotal: 0,
+    historyLimit: 50,
+    expandedRun: null,
+
+    // Queue
+    queueItems: [],
+
+    // Hot Topics
+    hotTopicsText: '',
+    hotTopicsThreshold: 0.75,
+    hotTopicsMsg: '',
+    hotTopicsMsgOk: true,
+
+    // Config editor
+    configText: '',
+    configLocked: true,
+    configMsg: '',
+    configMsgOk: true,
+
+
+    // Prompt editor
+    promptFiles: [],
+    selectedPrompt: null,
+    promptText: '',
+    promptsLocked: true,
+    promptMsg: '',
+    promptMsgOk: true,
+
+    // Sources editor
+    sourcesText: '',
+    sourcesLocked: true,
+    sourcesMsg: '',
+    sourcesMsgOk: true,
+
+    // Health
+    healthData: null,
+    healthLoading: false,
+
+    // Logs
+    logs: [],
+    logFilter: '',
+    logsPage: 0,
+    logsPerPage: 100,
+
+    // Password modal
+
+    // ---------------------------------------------------------------- //
+    get filteredLogs() {
+      return this.logFilter ? this.logs.filter(l => l.level === this.logFilter) : this.logs;
+    },
+    get logsTotalPages() {
+      return Math.max(1, Math.ceil(this.filteredLogs.length / this.logsPerPage));
+    },
+    get pagedLogs() {
+      const start = this.logsPage * this.logsPerPage;
+      return this.filteredLogs.slice(start, start + this.logsPerPage);
+    },
+    get historyTotalPages() {
+      return Math.max(1, Math.ceil(this.historyTotal / this.historyLimit));
+    },
+
+    // ---------------------------------------------------------------- //
+    // Init                                                              //
+    // ---------------------------------------------------------------- //
+    init() {
+      this.connectSSE();
+      this.loadHistory();
+      this.loadQueue();
+      this.loadConfig();
+      this.loadPromptList();
+      this.loadHotTopics();
+      this.loadSources();
+      this.$watch('tab', v => {
+        if (v === 'history')    this.loadHistory();
+        if (v === 'queue')      this.loadQueue();
+        if (v === 'hot_topics') this.loadHotTopics();
+        if (v === 'sources')    this.loadSources();
+      });
+      this.$watch('logFilter', () => { this.logsPage = this.logsTotalPages - 1; });
+    },
+
+    // ---------------------------------------------------------------- //
+    // SSE                                                               //
+    // ---------------------------------------------------------------- //
+    connectSSE() {
+      const es = new EventSource('/api/sse');
+      es.onopen  = () => { this.sseConnected = true; };
+      es.onerror = () => { this.sseConnected = false; };
+      es.onmessage = e => { try { this.handleEvent(JSON.parse(e.data)); } catch {} };
+    },
+
+    handleEvent(ev) {
+      const t = ev.type;
+
+      if (t === 'heartbeat') {
+        this.hb = ev;
+        // Only initialize schedule form fields from the first heartbeat.
+        // Subsequent heartbeats must NOT overwrite sliders the user may be editing.
+        // Explicit saves emit schedule_update which always syncs all fields.
+        if (!this.formInitialized) {
+          if (ev.rss_interval_s          != null) this.scheduleForm.rss_interval_min     = Math.round(ev.rss_interval_s / 60);
+          if (ev.publish_interval_s      != null) this.scheduleForm.publish_interval_min = Math.round(ev.publish_interval_s / 60);
+          if (ev.rss_paused              != null) this.scheduleForm.rss_paused     = ev.rss_paused;
+          if (ev.publish_paused          != null) this.scheduleForm.publish_paused = ev.publish_paused;
+          if (ev.filter_score_threshold  != null) this.scheduleForm.filter_score_threshold  = ev.filter_score_threshold;
+          if (ev.within_batch_threshold  != null) this.scheduleForm.within_batch_threshold  = ev.within_batch_threshold;
+          if (ev.cross_batch_threshold   != null) this.scheduleForm.cross_batch_threshold   = ev.cross_batch_threshold;
+          if (ev.notion_dedup_threshold  != null) this.scheduleForm.notion_dedup_threshold  = ev.notion_dedup_threshold;
+          if (ev.autopilot               != null) this.autopilot = ev.autopilot;
+          if (ev.verify_enabled          != null) this.verifyEnabled = ev.verify_enabled;
+          if (ev.x_scraper               != null) this.xScraper = ev.x_scraper;
+          if (ev.video_gen_max_24h       != null) this.scheduleForm.video_gen_max_24h = ev.video_gen_max_24h;
+          if (ev.video_gen_enabled       != null) this.videoGenEnabled = ev.video_gen_enabled;
+          if (ev.video_gen_max_24h       != null) this.videoGenMax24h  = ev.video_gen_max_24h;
+          this.formInitialized = true;
+        }
+        // Always update live run-status (not form fields)
+        if (ev.rss_running     != null) this.rssRunning     = ev.rss_running;
+        if (ev.publish_running != null) this.publishRunning = ev.publish_running;
+        // Quota usage is live state, not a form field — always refresh it.
+        if (ev.video_gen_used_24h != null) this.videoGenUsed24h = ev.video_gen_used_24h;
+      }
+      else if (t === 'run_start') {
+        const rss = this.pipelineType === 'epicfury'
+          ? ['sources_fetch','url_dedup','embeddings','within_batch_dedup','cross_batch_dedup','claude_score','post_gen','telegram_enqueue']
+          : ['notion_fetch','rss_fetch','url_dedup','embeddings','within_batch_dedup','cross_batch_dedup','notion_sync','notion_dedup','claude_score','article_select','editor_review','post_gen','verify_post','telegram_enqueue'];
+        const pub = ['sha1_dedup','media_upload','gettr_post'];
+        const toReset = ev.run_type === 'rss' ? rss : pub;
+        toReset.forEach(s => { this.nodeStatus[s] = 'idle'; delete this.nodeCounters[s]; });
+        this.triggering = null;
+        if (ev.run_type === 'rss')     this.rssRunning = true;
+        if (ev.run_type === 'publish') this.publishRunning = true;
+      }
+      else if (t === 'step_start') {
+        this.nodeStatus[ev.step] = 'running';
+      }
+      else if (t === 'step_done') {
+        this.nodeStatus[ev.step] = ev.articles_out === 0 && ev.articles_in > 0 ? 'skipped' : 'done';
+        this.nodeCounters[ev.step] = { in: ev.articles_in, out: ev.articles_out, ms: ev.duration_ms };
+      }
+      else if (t === 'step_error') {
+        this.nodeStatus[ev.step] = 'error';
+        this.alerts.push({ message: `Step ${ev.step} failed: ${ev.error}` });
+      }
+      else if (t === 'run_done') {
+        if (ev.status === 'failed') this.alerts.push({ message: `Run ${ev.run_id} failed${ev.error?' — '+ev.error:''}` });
+        if (ev.run_id?.includes('rss') || ev.run_type === 'rss') this.rssRunning = false;
+        if (ev.run_id?.includes('publish') || ev.run_type === 'publish') this.publishRunning = false;
+        if (this.tab === 'history') this.loadHistory();
+      }
+      else if (t === 'schedule_update') {
+        if (ev.rss_interval_s          != null) this.scheduleForm.rss_interval_min     = Math.round(ev.rss_interval_s / 60);
+        if (ev.publish_interval_s      != null) this.scheduleForm.publish_interval_min = Math.round(ev.publish_interval_s / 60);
+        if (ev.rss_paused              != null) this.scheduleForm.rss_paused     = ev.rss_paused;
+        if (ev.publish_paused          != null) this.scheduleForm.publish_paused = ev.publish_paused;
+        if (ev.filter_score_threshold  != null) this.scheduleForm.filter_score_threshold  = ev.filter_score_threshold;
+        if (ev.within_batch_threshold  != null) this.scheduleForm.within_batch_threshold  = ev.within_batch_threshold;
+        if (ev.cross_batch_threshold   != null) this.scheduleForm.cross_batch_threshold   = ev.cross_batch_threshold;
+        if (ev.notion_dedup_threshold  != null) this.scheduleForm.notion_dedup_threshold  = ev.notion_dedup_threshold;
+        if (ev.autopilot               != null) this.autopilot = ev.autopilot;
+        if (ev.verify_enabled          != null) this.verifyEnabled = ev.verify_enabled;
+        if (ev.x_scraper               != null) this.xScraper = ev.x_scraper;
+        if (ev.video_gen_enabled       != null) this.videoGenEnabled = ev.video_gen_enabled;
+        if (ev.video_gen_max_24h       != null) {
+          this.videoGenMax24h = ev.video_gen_max_24h;
+          this.scheduleForm.video_gen_max_24h = ev.video_gen_max_24h;
+        }
+      }
+      else if (t === 'config_reloaded') {
+        if (this.configLocked) this.loadConfig();
+      }
+      else if (t === 'log') {
+        const wasOnLast = this.logsPage >= this.logsTotalPages - 1;
+        this.logs.push(ev);
+        if (this.logs.length > 2000) this.logs.splice(0, 500);
+        if (wasOnLast) this.$nextTick(() => { this.logsPage = this.logsTotalPages - 1; });
+      }
+      else if (t === 'alert') {
+        this.alerts.push({ message: ev.message });
+      }
+    },
+
+    // ---------------------------------------------------------------- //
+    // Node styling                                                       //
+    // ---------------------------------------------------------------- //
+    nodeBoxCls(id) {
+      const s = this.nodeStatus[id] || 'idle';
+      if (s === 'running') return 'bg-blue-950   border-blue-500';
+      if (s === 'done')    return 'bg-green-950  border-green-600';
+      if (s === 'error')   return 'bg-red-950    border-red-600';
+      if (s === 'skipped') return 'bg-gray-900   border-gray-700 opacity-60';
+      return                      'bg-gray-900   border-gray-700';
+    },
+    nodeLabelCls(id) {
+      const s = this.nodeStatus[id] || 'idle';
+      if (s === 'running') return 'text-blue-200';
+      if (s === 'done')    return 'text-green-200';
+      if (s === 'error')   return 'text-red-200';
+      if (s === 'skipped') return 'text-gray-600';
+      return                      'text-gray-300';
+    },
+    nodeCounterCls(id) {
+      const s = this.nodeStatus[id];
+      if (s === 'done')  return 'text-green-400';
+      if (s === 'error') return 'text-red-400';
+      return 'text-gray-600';
+    },
+    nodeCounterTxt(id) {
+      const c = this.nodeCounters[id];
+      if (!c) return '';
+      return `↓${c.in} ↑${c.out}`;
+    },
+    nodeTooltip(id) {
+      const s = this.nodeStatus[id] || 'idle';
+      const c = this.nodeCounters[id];
+      let t = `${id}: ${s}`;
+      if (c) t += ` | in:${c.in} out:${c.out} ${c.ms}ms`;
+      return t;
+    },
+    arrowLineCls(id) {
+      const s = this.nodeStatus[id];
+      if (s === 'running') return 'bg-blue-500';
+      if (s === 'done')    return 'bg-green-600';
+      if (s === 'error')   return 'bg-red-600';
+      return 'bg-gray-700';
+    },
+    arrowFillCol(id) {
+      const s = this.nodeStatus[id];
+      if (s === 'running') return '#3b82f6';
+      if (s === 'done')    return '#16a34a';
+      if (s === 'error')   return '#dc2626';
+      return '#374151';
+    },
+
+    // ---------------------------------------------------------------- //
+    // Trigger                                                           //
+    // ---------------------------------------------------------------- //
+    async triggerRun(type) {
+      this.triggering = type;
+      try {
+        const r = await fetch(`/api/trigger/${type}`, { method:'POST' });
+        if (!r.ok) throw new Error(await r.text());
+      } catch(e) {
+        this.alerts.push({ message:`Trigger failed: ${e.message}` });
+        this.triggering = null;
+      }
+    },
+
+    async stopRun(type) {
+      try {
+        const r = await fetch(`/api/cancel/${type}`, { method: 'POST' });
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          this.alerts.push({ message: `Stop failed: ${body.error || r.statusText}` });
+        }
+      } catch(e) {
+        this.alerts.push({ message: `Stop failed: ${e.message}` });
+      }
+    },
+
+    // ---------------------------------------------------------------- //
+    // X Scraper switch (EpicFury)                                      //
+    // ---------------------------------------------------------------- //
+    async setXScraper(scraper) {
+      if (scraper === this.xScraper) return;
+      this.scraperSaved = false;
+      this.scraperError = '';
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ x_scraper: scraper }),
+        });
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.reason || body.error || r.statusText);
+        }
+        this.xScraper = scraper;
+        this.scraperSaved = true;
+        setTimeout(() => { this.scraperSaved = false; }, 3000);
+      } catch(e) {
+        this.scraperError = 'Failed: ' + e.message;
+        setTimeout(() => { this.scraperError = ''; }, 4000);
+      }
+    },
+
+    // ---------------------------------------------------------------- //
+    // Auto-pilot                                                        //
+    // ---------------------------------------------------------------- //
+    async toggleAutopilot() {
+      const next = !this.autopilot;
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ autopilot: next }),
+        });
+        if (!r.ok) throw new Error('Failed');
+        this.autopilot = next;
+      } catch(e) {
+        this.alerts.push({ message: 'Auto-pilot toggle failed: ' + e.message });
+      }
+    },
+
+    async toggleVerify() {
+      const next = !this.verifyEnabled;
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ verify_enabled: next }),
+        });
+        if (!r.ok) throw new Error('Failed');
+        this.verifyEnabled = next;
+      } catch(e) {
+        this.alerts.push({ message: 'Verify toggle failed: ' + e.message });
+      }
+    },
+
+    async toggleVideoGen() {
+      const next = !this.videoGenEnabled;
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_gen_enabled: next }),
+        });
+        if (!r.ok) throw new Error('Failed');
+        this.videoGenEnabled = next;
+        if (next && this.videoGenMax24h === 0) {
+          this.alerts.push({ message: 'AI video is ON but the 24h cap is 0 — set a cap in Settings.' });
+        }
+      } catch(e) {
+        this.alerts.push({ message: 'AI video toggle failed: ' + e.message });
+      }
+    },
+
+    async saveVideoGen() {
+      this.videoError = '';
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            video_gen_max_24h: this.scheduleForm.video_gen_max_24h,
+          }),
+        });
+        if (!r.ok) throw new Error((await r.json()).message || 'Error');
+        this.videoGenMax24h = this.scheduleForm.video_gen_max_24h;
+        this.videoSaved = true;
+        setTimeout(() => { this.videoSaved = false; }, 2500);
+      } catch(e) {
+        this.videoError = e.message;
+        setTimeout(() => { this.videoError = ''; }, 4000);
+      }
+    },
+
+    // ---------------------------------------------------------------- //
+    // Schedule                                                          //
+    // ---------------------------------------------------------------- //
+    async toggleRssPause() {
+      this.scheduleForm.rss_paused = !this.scheduleForm.rss_paused;
+      await this.saveRssSchedule();
+    },
+
+    async togglePublishPause() {
+      this.scheduleForm.publish_paused = !this.scheduleForm.publish_paused;
+      await this.savePublishSchedule();
+    },
+
+    async saveRssSchedule() {
+      this.rssError = '';
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rss_interval_s: this.scheduleForm.rss_interval_min * 60,
+            rss_paused:     this.scheduleForm.rss_paused,
+          }),
+        });
+        if (!r.ok) throw new Error((await r.json()).message || 'Error');
+        this.rssSaved = true;
+        setTimeout(() => { this.rssSaved = false; }, 2500);
+      } catch(e) {
+        this.rssError = e.message;
+        setTimeout(() => { this.rssError = ''; }, 4000);
+      }
+    },
+
+    async savePublishSchedule() {
+      this.publishError = '';
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            publish_interval_s: this.scheduleForm.publish_interval_min * 60,
+            publish_paused:     this.scheduleForm.publish_paused,
+          }),
+        });
+        if (!r.ok) throw new Error((await r.json()).message || 'Error');
+        this.publishSaved = true;
+        setTimeout(() => { this.publishSaved = false; }, 2500);
+      } catch(e) {
+        this.publishError = e.message;
+        setTimeout(() => { this.publishError = ''; }, 4000);
+      }
+    },
+
+    async saveFilterScore() {
+      this.scoreError = '';
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filter_score_threshold: this.scheduleForm.filter_score_threshold,
+          }),
+        });
+        if (!r.ok) throw new Error((await r.json()).message || 'Error');
+        this.scoreSaved = true;
+        setTimeout(() => { this.scoreSaved = false; }, 2500);
+      } catch(e) {
+        this.scoreError = e.message;
+        setTimeout(() => { this.scoreError = ''; }, 4000);
+      }
+    },
+
+    async saveDedupThresholds() {
+      this.dedupError = '';
+      try {
+        const r = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            within_batch_threshold: this.scheduleForm.within_batch_threshold,
+            cross_batch_threshold:  this.scheduleForm.cross_batch_threshold,
+            notion_dedup_threshold: this.scheduleForm.notion_dedup_threshold,
+          }),
+        });
+        if (!r.ok) throw new Error((await r.json()).message || 'Error');
+        this.dedupSaved = true;
+        setTimeout(() => { this.dedupSaved = false; }, 2500);
+      } catch(e) {
+        this.dedupError = e.message;
+        setTimeout(() => { this.dedupError = ''; }, 4000);
+      }
+    },
+
+    // ---------------------------------------------------------------- //
+    // History                                                           //
+    // ---------------------------------------------------------------- //
+    async loadHistory(page) {
+      if (page == null) page = this.historyPage;
+      page = Math.max(0, page);
+      const r = await fetch(`/api/history?limit=${this.historyLimit}&page=${page}`);
+      if (r.ok) {
+        const data = await r.json();
+        this.history = data.runs || [];
+        this.historyTotal = data.total || 0;
+        this.historyPage = data.page || 0;
+      }
+    },
+
+    // ---------------------------------------------------------------- //
+    // Queue                                                             //
+    // ---------------------------------------------------------------- //
+    async loadQueue() {
+      const r = await fetch('/api/queue');
+      if (r.ok) this.queueItems = await r.json();
+    },
+    async queueAction(id, action) {
+      const r = await fetch(`/api/queue/${id}/${action}`, { method:'POST' });
+      if (r.ok) this.queueItems = this.queueItems.filter(i => i.article_id !== id);
+    },
+
+    // ---------------------------------------------------------------- //
+    // Hot Topics                                                        //
+    // ---------------------------------------------------------------- //
+    async loadHotTopics() {
+      const r = await fetch('/api/hot-topics');
+      if (r.ok) {
+        const data = await r.json();
+        this.hotTopicsText = (data.keywords || []).join('\n');
+        this.hotTopicsThreshold = data.semantic_threshold ?? 0.75;
+      }
+    },
+    async saveHotTopics() {
+      const keywords = this.hotTopicsText.split('\n').map(s => s.trim()).filter(Boolean);
+      const r = await fetch('/api/hot-topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords, semantic_threshold: this.hotTopicsThreshold }),
+      });
+      const body = await r.json();
+      this.hotTopicsMsgOk = r.ok;
+      this.hotTopicsMsg = r.ok
+        ? `✓ Saved ${body.count} keyword${body.count !== 1 ? 's' : ''}`
+        : ('✗ ' + (body.error || 'Save failed'));
+      if (r.ok) setTimeout(() => this.hotTopicsMsg = '', 3000);
+    },
+
+    // ---------------------------------------------------------------- //
+    // Config                                                            //
+    // ---------------------------------------------------------------- //
+    async loadConfig(raw = false) {
+      const r = await fetch('/api/config' + (raw ? '?raw=1' : ''));
+      if (r.ok) this.configText = await r.text();
+    },
+    async reloadConfigFromDisk() {
+      this.configMsg = '';
+      try {
+        const r = await fetch('/api/reload-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const body = await r.json();
+        this.configMsg = r.ok ? '✓ Config reloaded from disk' : ('✗ ' + (body.error || 'Reload failed'));
+        this.configMsgOk = r.ok;
+        if (r.ok) this.loadConfig();
+      } catch(e) {
+        this.configMsg = '✗ Request failed';
+        this.configMsgOk = false;
+      }
+      setTimeout(() => { this.configMsg = ''; }, 5000);
+    },
+    async saveConfig() {
+      this.configMsg = '';
+      const r = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: this.configText,
+      });
+      if (r.ok) {
+        this.configMsg = '✓ Saved and reloaded';
+        this.configMsgOk = true;
+        this.configLocked = true;
+      } else {
+        this.configMsg = '✗ ' + (await r.text() || 'Save failed');
+        this.configMsgOk = false;
+      }
+      setTimeout(() => { this.configMsg = ''; }, 5000);
+    },
+
+    // ---------------------------------------------------------------- //
+    // Prompts                                                           //
+    // ---------------------------------------------------------------- //
+    async loadPromptList() {
+      const r = await fetch('/api/prompts');
+      if (r.ok) {
+        this.promptFiles = await r.json();
+        if (this.promptFiles.length && !this.selectedPrompt) this.loadPrompt(this.promptFiles[0]);
+      }
+    },
+    async loadPrompt(name) {
+      this.selectedPrompt = name;
+      const r = await fetch(`/api/prompts/${encodeURIComponent(name)}`);
+      if (r.ok) this.promptText = await r.text();
+    },
+    async savePrompt() {
+      this.promptMsg = '';
+      const r = await fetch(`/api/prompts/${encodeURIComponent(this.selectedPrompt)}`, {
+        method:'POST', headers:{'Content-Type':'text/plain'}, body: this.promptText,
+      });
+      if (r.ok) {
+        this.promptMsg = '✓ Saved';
+        this.promptMsgOk = true;
+        this.promptsLocked = true;
+      } else {
+        this.promptMsg = '✗ ' + (await r.text());
+        this.promptMsgOk = false;
+      }
+      setTimeout(() => { this.promptMsg = ''; }, 3000);
+    },
+
+    // ---------------------------------------------------------------- //
+    // Sources                                                           //
+    // ---------------------------------------------------------------- //
+    async loadSources() {
+      const r = await fetch('/api/sources');
+      if (r.ok) this.sourcesText = await r.text();
+    },
+    async saveSources() {
+      this.sourcesMsg = '';
+      const r = await fetch('/api/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: this.sourcesText,
+      });
+      if (r.ok) {
+        this.sourcesMsg = '✓ Saved';
+        this.sourcesMsgOk = true;
+        this.sourcesLocked = true;
+      } else {
+        this.sourcesMsg = '✗ ' + (await r.text() || 'Save failed');
+        this.sourcesMsgOk = false;
+      }
+      setTimeout(() => { this.sourcesMsg = ''; }, 3000);
+    },
+
+    // ---------------------------------------------------------------- //
+    // Health                                                            //
+    // ---------------------------------------------------------------- //
+    async checkHealth() {
+      this.healthLoading = true;
+      try {
+        const r = await fetch('/api/health');
+        if (r.ok) this.healthData = await r.json();
+      } finally { this.healthLoading = false; }
+    },
+
+    // ---------------------------------------------------------------- //
+    // Formatters                                                        //
+    // ---------------------------------------------------------------- //
+    fmtSecs(s) {
+      if (s == null || s === 0) return '—';
+      const m = Math.floor(s / 60), sec = s % 60;
+      return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+    },
+    fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    },
+    fmtTime(iso) {
+      if (!iso) return '';
+      try { return new Date(iso).toLocaleTimeString(); } catch { return iso; }
+    },
+    fmtDuration(start, end) {
+      if (!start || !end) return '—';
+      try {
+        const ms = new Date(end) - new Date(start);
+        if (ms < 1000) return ms + 'ms';
+        if (ms < 60000) return (ms/1000).toFixed(1) + 's';
+        return (ms/60000).toFixed(1) + 'm';
+      } catch { return '—'; }
+    },
+  };
+}
+</script>
+</body>
+</html>

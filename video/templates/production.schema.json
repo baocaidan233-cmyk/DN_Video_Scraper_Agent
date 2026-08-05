@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "News motion video production file",
+  "description": "The editable structured production file. Every field a human might want to tweak (headline wording, scene order, timings, transitions, voice, music, aspect ratio) lives here so a re-render never requires touching code.",
+  "type": "object",
+  "required": ["headline", "handle", "scenes", "audio", "output_path"],
+  "properties": {
+    "headline": { "type": "string", "description": "Final approved headline, shown in the chyron." },
+    "handle": { "type": "string", "example": "@DailyNews" },
+    "font_file": { "type": "string", "description": "Absolute path to a licensed font. The user must supply this; do not embed system fonts you lack rights to redistribute." },
+    "aspect": { "type": "string", "enum": ["16:9", "9:16", "1:1"], "default": "16:9" },
+    "output_path": { "type": "string" },
+    "voiceover_script": { "type": "string", "description": "Word-for-word narration text, kept to ~55-80 words for a 20-30s read." },
+    "scenes": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["type", "duration"],
+        "properties": {
+          "type": { "enum": ["image", "video", "endcard", "outro"], "description": "'outro' points at a pre-rendered animated outro clip (see make_outro.py)." },
+          "path": { "type": "string", "description": "Local path to the vetted asset (image/video/outro clip)." },
+          "duration": { "type": "number", "description": "Seconds on screen." },
+          "in": { "type": "number", "description": "For video: in-point in seconds." },
+          "kenburns": { "enum": ["in", "out"], "default": "in", "description": "For image scenes only." },
+          "transition": { "enum": ["fade", "slideleft", "slideright", "wipeleft", "dissolve", "smoothleft"], "default": "fade" },
+          "handle": { "type": "string", "description": "For endcard only." },
+          "bg_color": { "type": "string", "description": "For endcard only, e.g. 0x0d1117." },
+          "accent_color": { "type": "string", "description": "For endcard only, e.g. 0xE60023 (the FOLLOW pill / stripe color)." },
+          "source": { "type": "string", "description": "Where this asset came from (URL or provider)." },
+          "provider": { "type": "string", "description": "e.g. 'Wikimedia Commons', 'Openverse', 'self-produced', 'user-supplied'." },
+          "license": { "type": "string", "description": "e.g. 'CC0', 'CC BY 4.0', 'Public Domain'." },
+          "attribution": { "type": "string", "description": "Required credit line if the license needs one." },
+          "rights_verified": { "type": "boolean", "description": "false triggers a warning in the manifest and blocks silent use." }
+        }
+      }
+    },
+    "story": { "type": "string", "description": "The original source story, kept for records/traceability." },
+    "chyron": {
+      "type": "object",
+      "properties": {
+        "headline": { "type": "string" },
+        "logo": { "type": "string", "description": "Path to the account logo (user-supplied, PNG with alpha preferred)." },
+        "accent_color": { "type": "string", "description": "Brand accent, e.g. 0xE60023." }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "properties": {
+        "voice": { "type": "string", "description": "Path to the generated narration mp3/wav/m4a." },
+        "bgm": { "type": "string", "description": "Path to the music bed. Recorded in the manifest with its license." },
+        "bgm_source": { "type": "string" },
+        "bgm_license": { "type": "string" },
+        "tts_provider": { "type": "string", "description": "e.g. 'edge', 'say', 'auto'." },
+        "tts_voice": { "type": "string" },
+        "timing": { "type": "string", "description": "Path to the TTS boundary sidecar (voice.m4a.timing.json). When present, subtitles are rendered karaoke-style (each word highlights as spoken)." }
+      }
+    },
+    "subtitle_file": { "type": "string", "description": "Path to the .srt burned into the video and also delivered as a separate output." }
+  }
+}

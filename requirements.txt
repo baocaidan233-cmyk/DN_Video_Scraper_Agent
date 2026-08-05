@@ -1,0 +1,19 @@
+aiohttp==3.10.11
+feedparser==6.0.11
+pydantic==2.10.4
+pydantic-settings==2.7.0
+PyYAML==6.0.2
+redis==5.2.1
+openai==1.61.0
+qdrant-client==1.13.2
+anthropic==0.44.0
+python-telegram-bot[ext]==21.10
+numpy==2.2.1
+structlog==24.4.0
+orjson==3.10.14
+trafilatura>=1.12.0
+Pillow>=10.0.0
+lxml_html_clean>=0.4.0
+# X.com scraping: twitterapi.io (primary), Twitter Syndication API + Nitter RSS (fallbacks)
+# All use aiohttp — no additional library required.
+edge-tts>=7.0        # video/ narration TTS (unofficial MS endpoint; see video/UPSTREAM.md)

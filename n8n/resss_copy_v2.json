@@ -1,0 +1,328 @@
+{
+  "name": "resss_copy_v2",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "/*\n  n8n Code node\n  Purpose: Recursively search every input item for a property named \"articles\"\n           (case-insensitive) whose value is an array, then merge them.\n           Then, filter articles within the last N hours and return the latest max_feed articles by publishedAt.\n*/\n\nconst combinedArticles = [];\n\n/**\n * Recursively traverse an object/array to collect every \"articles\" array.\n * @param {any} node - current node to inspect\n */\nfunction collectArticles(node) {\n  if (Array.isArray(node)) {\n    node.forEach(collectArticles);\n    return;\n  }\n\n  if (node && typeof node === 'object') {\n    for (const [key, value] of Object.entries(node)) {\n      if (key.toLowerCase() === 'articles' && Array.isArray(value)) {\n        combinedArticles.push(...value);\n      } else if (typeof value === 'object' && value !== null) {\n        collectArticles(value);\n      }\n    }\n  }\n}\n\n// Obtain all incoming items from all input branches\nconst allItems = $input.all();\nfor (const item of allItems) {\n  collectArticles(item.json);\n}\n\n// Filter and sort articles\nconst latestArticles = combinedArticles\n  .filter(article => {\n    // Ensure publishedAt exists\n    if (!article.publishedAt) {\n      return false;\n    }\n    \n    // Filter articles within the last N hours\n    const articleDate = new Date(article.publishedAt);\n    \n    // Check if the article date is valid before comparing\n    if (isNaN(articleDate.getTime())) {\n      return false;\n    }\n    \n    return true;\n  });\n\n// Output\nreturn [{\n  json: {\n    articles: latestArticles,\n    status: 'ok',\n    totalResults: latestArticles.length,\n  }\n}];"
+      },
+      "name": "Combine Articles",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "7c802771-c918-457f-a827-3ddc03d08cc2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the articles from the first input branch\nconst allArticles = $input.item.json.articles || [];\n\nconst seen = new Set();          // ❶ store normalized URLs\nconst uniqueArticles = [];       // ❷ keep only first article per URL\n\nfor (const art of allArticles) {\n  const hash = art.url_hash;\n  if (!hash) continue;         // skip if url missing\n\n  // If we've never seen this URL, keep the article\n  if (!seen.has(hash)) {\n    seen.add(hash);\n    uniqueArticles.push(art);\n  }\n}\n\n// ❸ Now map over the unique list\nreturn uniqueArticles.map(article => {\n  const truncate = (str) => (str && str.length > 1000 ? str.slice(0, 1000) : str);\n  const trim     = (str) => (typeof str === 'string' ? str.trim() : str);\n\n  return {\n    json: {\n      url: trim(article.url),\n      title: trim(truncate(article.title)),\n      description: trim(truncate(article.description)),\n      author: trim(article.author),\n      publishedAt: article.publishedAt,\n      urlToImage: article.urlToImage,\n      source: article.source?.name,\n      url_hash: article.url_hash,\n      cookie: article.cookie\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "fda5b97c-1739-4d53-ab06-96e0b782af8a",
+      "name": "flattern"
+    },
+    {
+      "parameters": {
+        "batchSize": 44,
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -224,
+        192
+      ],
+      "id": "abad3cba-9933-4daf-840d-69acc71ed170",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.property_rss }}",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        208
+      ],
+      "id": "67111b5b-b487-4ead-9722-21db5504ea13",
+      "name": "RSS Read",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform FoxNews RSS items to NewsAPI format\nconst transformedArticles = [];\n\nfor (const item of $input.all()) {\n  const transformedArticle = {\n    source: {\n      id: \"RSS\",\n      name: \"RSS\"\n    },\n    author: null,\n    title: item.json.title,\n    description: item.json.description || item.json.contentSnippet,\n    url: item.json.link,\n    urlToImage: null,\n    publishedAt: item.json.pubDate,\n    cookie: item.json.cookie,    \n  };\n  \n  transformedArticles.push(transformedArticle);\n}\n\n// Return in NewsAPI format\nreturn [{\n  json: {\n    status: \"ok\",\n    totalResults: transformedArticles.length,\n    articles: transformedArticles\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d4a1b6f7-533c-44d4-9bdb-8f128c21218b",
+      "name": "Transform"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  n8n Code node\n  Purpose: Filter RSS feed items by datetime (UTC)\n           Apply time filtering based on filter_feed_hours\n*/\n\n// Get configuration values from global_config node\nconst filter_feed_hours = $('start_read_rss').first().json.filter_feed_hours;\n\n// Calculate the UTC cutoff time (filter_feed_hours hours ago)\nconst now = new Date();\nconst cutoffTimeUTC = new Date(\n  Date.UTC(\n    now.getUTCFullYear(),\n    now.getUTCMonth(),\n    now.getUTCDate(),\n    now.getUTCHours() - filter_feed_hours,\n    now.getUTCMinutes(),\n    now.getUTCSeconds(),\n    now.getUTCMilliseconds()\n  )\n);\n\n// Get all input items from RSS Read\nconst allItems = $input.all();\n\n// Filter and sort RSS items (all in UTC)\nconst filteredItems = allItems\n  .filter(item => {\n    // Ensure pubDate exists\n    if (!item.json.pubDate) {\n      return false;\n    }\n    // Parse pubDate as UTC\n    const itemDate = new Date(item.json.pubDate);\n    if (isNaN(itemDate.getTime())) {\n      return false;\n    }\n    // Compare using UTC time\n    return itemDate.getTime() >= cutoffTimeUTC.getTime();\n  })\n  .sort((a, b) => {\n    // Sort by pubDate in UTC\n    const dateA = new Date(a.json.pubDate);\n    const dateB = new Date(b.json.pubDate);\n    return dateB.getTime() - dateA.getTime();\n  })\n  .map(item => {\n    // Convert pubDate to a unified UTC ISO string for consistency\n    const itemDate = new Date(item.json.pubDate);\n    item.json.pubDate = itemDate.toISOString();\n    return item;\n  });\n\n// Return the filtered items\nreturn filteredItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        192
+      ],
+      "id": "c62a26c9-d04c-4444-939b-031725423298",
+      "name": "limit",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  n8n Code node\n  Purpose: Recursively search every input item for a property named \"articles\"\n           (case-insensitive) whose value is an array, then merge them.\n           Then, filter articles within the last N hours (UTC) and return the latest max_feed articles by publishedAt (UTC).\n*/\n\nconst combinedArticles = [];\n\n/**\n * Recursively traverse an object/array to collect every \"articles\" array.\n * @param {any} node - current node to inspect\n */\nfunction collectArticles(node) {\n  if (Array.isArray(node)) {\n    node.forEach(collectArticles);\n    return;\n  }\n\n  if (node && typeof node === 'object') {\n    for (const [key, value] of Object.entries(node)) {\n      if (key.toLowerCase() === 'articles' && Array.isArray(value)) {\n        combinedArticles.push(...value);\n      } else if (typeof value === 'object' && value !== null) {\n        collectArticles(value);\n      }\n    }\n  }\n}\n\n// Get configuration values\nconst max_feed = $node[\"start_read_rss\"].json[\"max_feed_items\"];\nconst filter_feed_hours = $node[\"start_read_rss\"].json[\"filter_feed_hours\"];\n\n// Calculate the UTC cutoff time (N hours ago)\nconst now = new Date();\nconst cutoffTimeUTC = new Date(\n  Date.UTC(\n    now.getUTCFullYear(),\n    now.getUTCMonth(),\n    now.getUTCDate(),\n    now.getUTCHours() - filter_feed_hours,\n    now.getUTCMinutes(),\n    now.getUTCSeconds(),\n    now.getUTCMilliseconds()\n  )\n);\n\n// Obtain all incoming items from all input branches\nconst allItems = $input.all();\nfor (const item of allItems) {\n  collectArticles(item.json);\n}\n\n// Filter and sort articles (all in UTC)\nconst latestArticles = combinedArticles\n  .filter(article => {\n    // Ensure publishedAt exists\n    if (!article.publishedAt) {\n      return false;\n    }\n    // Parse publishedAt as UTC\n    const articleDate = new Date(article.publishedAt);\n    if (isNaN(articleDate.getTime())) {\n      return false;\n    }\n    // Compare using UTC time\n    return articleDate.getTime() >= cutoffTimeUTC.getTime();\n  })\n  .sort((a, b) => {\n    // Sort by publishedAt in UTC\n    const dateA = new Date(a.publishedAt);\n    const dateB = new Date(b.publishedAt);\n    return dateB.getTime() - dateA.getTime();\n  })\n  .slice(0, max_feed);\n\n// Output\nreturn [{\n  json: {\n    articles: latestArticles,\n    status: 'ok',\n    totalResults: latestArticles.length,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "826053dd-1546-42dd-8b7a-2c0cb2fd0cbc",
+      "name": "filter_cnt"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ff949e8c-b770-4626-90cd-403eca0c5b9d",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        224,
+        208
+      ],
+      "id": "bc25bb1a-3855-4eb3-b1cb-bb58133341b2",
+      "name": "Filter RSS Errors",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst items = $input.all();\n\nfor (const item of items) {\n  if (item.json.articles && Array.isArray(item.json.articles)) {\n    for (const article of item.json.articles) {\n        // normalize URL (strip query params like before)\n        const cleanUrl = article.url.split('?')[0];\n\n        // stronger + longer hash (but same variable name)\n        article.url_hash = crypto.createHash('sha256')\n          .update(cleanUrl)\n          .digest('hex')\n          .slice(0, 16); // was 8, now 16\n    }\n  }\n}\n\nreturn items; \n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "b316ee77-1bf7-443d-9601-f6fe778fa84a",
+      "name": "link_url_hash"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\n\nreturn $input.first().json.rss_notion_source;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        192
+      ],
+      "id": "4a530ebc-ba88-4c02-92f2-5d52f5c18d85",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "rss_read_batchsize",
+              "type": "number"
+            },
+            {
+              "name": "filter_feed_hours",
+              "type": "number"
+            },
+            {
+              "name": "max_feed_items",
+              "type": "number"
+            },
+            {
+              "name": "rss_notion_source",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -784,
+        192
+      ],
+      "id": "e868f93d-b1ca-4fff-aba3-8255bfa44dad",
+      "name": "start_read_rss"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Combine Articles": {
+      "main": [
+        [
+          {
+            "node": "link_url_hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Transform",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Filter RSS Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform": {
+      "main": [
+        [
+          {
+            "node": "filter_cnt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "limit": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter_cnt": {
+      "main": [
+        [
+          {
+            "node": "Combine Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter RSS Errors": {
+      "main": [
+        [
+          {
+            "node": "limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "link_url_hash": {
+      "main": [
+        [
+          {
+            "node": "flattern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "start_read_rss": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "8663d0e1-e515-4962-8d94-aecb5b824a6a",
+  "meta": {
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "j5kxcqc9t905RP-D_26Ch",
+  "tags": []
+}

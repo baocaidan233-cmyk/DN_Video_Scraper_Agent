@@ -1,0 +1,1397 @@
+{
+  "name": "similarity check flow ( posting_channels_vectorDB )",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1408,
+        -64
+      ],
+      "id": "b925ccac-0cc9-4ed2-b3c1-15dd5c7b631a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// If no related articles exist, just return the original article (clean fields only)\nreturn [\n  {\n    json: {\n      id: $json.id,\n      url: $json.url,\n      property_title: $json.property_title,\n      property_description: $json.property_description,\n      property_author: $json.property_author,\n      property_published_at: $json.property_published_at,\n      property_url_to_image:$json. property_url_to_image,\n      property_url_hash: $json.property_url_hash,\n      property_url: $json.property_url,\n      property_channel_name: $json.property_channel_name,\n      property_llm_score: $json.property_llm_score,\n      property_llm_comment: $json.property_llm_comment,\n      property_post_content: $json.property_post_content,\n      priority_score: $json.priority_score,\n      property_content: $json.property_content,\n      property_created_at: $json.property_created_at,\n      property_former_check: $json.property_former_check,\n      duplicate: $json.duplicate,\n      crossBatchScore: $json.crossBatchScore,\n      crossBatchMatchedUrl: $json.crossBatchMatchedUrl,\n      crossBatchMatchedContent: $json.crossBatchMatchedContent,\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        -240
+      ],
+      "id": "ace9ac88-9ca8-46fe-96bb-fa9466aefa85",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "896170fd-d86c-49e3-8a9a-6af432abed56",
+              "leftValue": "={{ $json.hasArticles }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1040,
+        -80
+      ],
+      "id": "4879d24c-0f6b-47de-9dcd-abc0fdc0a04a",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// items[0] = original article\n// items[1..N] = related articles from Qdrant\n\nconst original = items[0].json;\n\n// Grab related ones (they have `score`)\nconst related = items.slice(1).filter(i => i.json.score !== undefined);\n\n// Flag: do we have any related?\nconst hasArticles = related.length > 0;\n\n// Collect scores and preserve full related docs\nconst relatedScores = related.map(r => r.json.score);\nconst relatedArticles = related.map(r => r.json);\n\n// Return the original article enriched with related info\nreturn [\n  {\n    json: {\n      ...original,\n      hasArticles,\n      relatedScores,\n      relatedArticles\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        -112
+      ],
+      "id": "69e11e9e-f815-4d41-a793-0cc24bb4b7ca",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const scores = $json.relatedScores || [];\nconst matches = $json.relatedArticles || [];\nconst threshold = 0.80;\n\nlet hasHighScore = false;\nlet bestScore = null;\nlet bestMatch = null;\n\nfor (let i = 0; i < scores.length; i++) {\n  const score = scores[i];\n  if (score > threshold) {\n    hasHighScore = true;\n  }\n  if (bestScore === null || score > bestScore) {\n    bestScore = score;\n    bestMatch = matches[i];\n  }\n}\n\nreturn [\n  {\n    json: {\n      id: $json.id,\n      url: $json.url,\n      property_title: $json.property_title,\n      property_description: $json.property_description,\n      property_author: $json.property_author,\n      property_published_at: $json.property_published_at,\n      property_url_to_image:$json. property_url_to_image,\n      property_url_hash: $json.property_url_hash,\n      property_url: $json.property_url,\n      property_channel_name: $json.property_channel_name,\n      property_llm_score: $json.property_llm_score,\n      property_llm_comment: $json.property_llm_comment,\n      property_post_content: $json.property_post_content,\n      priority_score: $json.priority_score,\n      property_content: $json.property_content,\n      property_former_check: $json.property_former_check,\n      embedding: $json.embedding,\n      property_created_at: $json.property_created_at,\n\n      // Step 2 dedup info\n      duplicate: hasHighScore,\n      crossBatchScore: bestScore,\n      crossBatchMatchedUrl: bestMatch?.document?.metadata?.url || null,\n      crossBatchMatchedContent: bestMatch?.document?.pageContent || null\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        16
+      ],
+      "id": "b635ada7-09b3-4273-8f47-4c1fda79c038",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "27216dc9-9f32-80f7-bb29-f514b1816e80",
+          "mode": "list",
+          "cachedResultName": "am1st_news_log",
+          "cachedResultUrl": "https://www.notion.so/27216dc99f3280f7bb29f514b1816e80"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "llm_score|number",
+              "numberValue": "={{ $json.output.llm_score }}"
+            },
+            {
+              "key": "article_title|rich_text",
+              "textContent": "={{ $json.title }}"
+            },
+            {
+              "key": "article_link|url",
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "created_at|date",
+              "date": "={{$now}}"
+            },
+            {
+              "key": "article_link_hash|rich_text",
+              "textContent": "={{ $json.url_hash }}"
+            },
+            {
+              "key": "from_node|rich_text",
+              "textContent": "gap_analysis_v2"
+            },
+            {
+              "key": "llm_comment|rich_text",
+              "textContent": "={{ $json.output.llm_comment }}"
+            },
+            {
+              "key": "similarity_score|number",
+              "numberValue": "={{ $json.crossBatchScore }}"
+            },
+            {
+              "key": "matching_article_url|url",
+              "urlValue": "={{ $json.crossBatchMatchedUrl }}"
+            },
+            {
+              "key": "matching_article_title|rich_text",
+              "textContent": "={{ $json.crossBatchMatchedContent }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -352,
+        -48
+      ],
+      "id": "a40af550-9fce-4844-b643-79e1ab29a874",
+      "name": "Create a database page1",
+      "credentials": {
+        "notionApi": {
+          "id": "88lLSJkFWGO8Afa8",
+          "name": "am1st_news_log"
+        }
+      },
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8adb4d51-040d-452e-8136-1eea5e14df0d",
+              "leftValue": "={{$json.duplicate}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -624,
+        32
+      ],
+      "id": "8538ea9f-5bde-4c24-892a-8b551e3bbfce",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      id: $json.id,\n      url: $json.url,\n      property_title: $json.property_title,\n      property_description: $json.property_description,\n      property_author: $json.property_author,\n      property_published_at: $json.property_published_at,\n      property_url_to_image:$json. property_url_to_image,\n      property_url_hash: $json.property_url_hash,\n      property_url: $json.property_url,\n      property_channel_name: $json.property_channel_name,\n      property_llm_score: $json.property_llm_score,\n      property_llm_comment: $json.property_llm_comment,\n      property_post_content: $json.property_post_content,\n      priority_score: $json.priority_score,\n      property_content: $json.property_content,\n      property_former_check: $json.property_former_check,\n      duplicate: $json.duplicate,\n      property_created_at: $json.property_created_at,\n      crossBatchMatchedUrl: $json.crossBatchMatchedUrl,\n      crossBatchMatchedContent: $json.crossBatchMatchedContent,\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        112
+      ],
+      "id": "01f4a8c7-ea83-4704-bff0-12a9752d2c9b",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2784,
+        32
+      ],
+      "id": "6fd7ef63-a941-4b18-afc4-c5bfb739d0a3",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        160,
+        -144
+      ],
+      "id": "a82804db-4d22-4d89-9b33-36fd58fbad15",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n    {\n      json: {\n        id: $json.id,\n        url: $json.url,\n        property_title: $json.property_title,\n        property_description: $json.property_description,\n        property_author: $json.property_author,\n        property_published_at: $json.property_published_at,\n        property_url_to_image:$json. property_url_to_image,\n        property_url_hash: $json.property_url_hash,\n        property_url: $json.property_url,\n        property_channel_name: $json.property_channel_name,\n        property_llm_score: $json.property_llm_score,\n        property_llm_comment: $json.property_llm_comment,\n        property_post_content: $json.property_post_content,\n        priority_score: $json.priority_score,\n        property_content: $json.property_content,\n        property_created_at: $json.property_created_at,\n        property_former_check: $json.property_former_check,\n        duplicate: $json.duplicate,\n        crossBatchScore: $json.crossBatchScore,\n        crossBatchMatchedUrl: $json.crossBatchMatchedUrl,\n        crossBatchMatchedContent: $json.crossBatchMatchedContent,\n        \n      }\n    }\n  ];\n\n// if ($json.duplicate === true) {\n//   // send a minimal placeholder so loop continues\n//   return [{ json: { continue: true } }];\n// } else {\n//   // forward the unique item\n//   return [\n//     {\n//       json: {\n//         url: $json.url,\n//         title: $json.title,\n//         description: $json.description,\n//         author: $json.author,\n//         publishedAt: $json.publishedAt,\n//         urlToImage: $json.urlToImage,\n//         url_hash: $json.url_hash,\n//         channel_name: $json.channel_name,\n//         llm_score: $json.llm_score,\n//         llm_comment: $json.llm_comment,\n//         post_content: $json.post_content,\n//       }\n//     }\n//   ];\n// }\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        144
+      ],
+      "id": "9bd02c11-3893-45f8-a637-981933de53bc",
+      "name": "Code4",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep only items that have a URL (or any required field).\nreturn items.filter(item => item.json.url);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2512,
+        -192
+      ],
+      "id": "af756ed7-73ae-459b-b40d-11f054336490",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e664a7f3-ac5c-4347-bf42-a923a0d6364a",
+              "name": "duplicate",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        -544
+      ],
+      "id": "59ab6406-f9cb-45f1-b297-6a20542ab769",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---------- Cosine Similarity Helper ----------\nfunction cosineSim(a, b) {\n  let dot = 0.0, normA = 0.0, normB = 0.0;\n  for (let i = 0; i < a.length; i++) {\n    dot   += a[i] * b[i];\n    normA += a[i] * a[i];\n    normB += b[i] * b[i];\n  }\n  return dot / (Math.sqrt(normA) * Math.sqrt(normB));\n}\n\n// ---------- Config ----------\nconst threshold = 0.70; // adjust as needed\nconst deduped   = [];\nconst results   = [];\n\n// ---------- Main Comparison ----------\nfor (const item of items) {\n  const emb = item.json.embedding;\n  \n\n  let isDup = false;\n  let simScore = null;\n  let matchUrl = null;\n  let matchTitle = null;\n\n  for (const kept of deduped) {\n    const keptEmb = kept.json.embedding;\n    const sim = cosineSim(emb, keptEmb);\n\n    if (sim > threshold) {\n      isDup = true;\n      simScore   = sim;\n      matchUrl   = kept.json.property_url;\n      matchTitle = kept.json.property_title;\n      break; // stop at first match\n    }\n  }\n\n  results.push({\n    json: {\n      ...item.json,\n      duplicate: isDup,\n      similarity: simScore,\n      matchedUrl: matchUrl,\n      matchedTitle: matchTitle\n    }\n  });\n\n  if (!isDup) deduped.push(item);\n}\n\n// ---------- Output ----------\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3616,
+        48
+      ],
+      "id": "7f479a8b-5ffb-47bb-8b17-4eb2fbe99fc2",
+      "name": "BatchDedup"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Content-Type\": \"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify($json.textForEmbedding) }}\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -4384,
+        32
+      ],
+      "id": "1ceead6e-ef1c-43df-955e-8c7a6dc7e6a5",
+      "name": "HTTP Request",
+      "credentials": {
+        "openAiApi": {
+          "id": "uShXFjjxXqnf41em",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Step 1: Find duplicates with embedding\n",
+        "height": 1056,
+        "width": 2080,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -5040,
+        -432
+      ],
+      "typeVersion": 1,
+      "id": "ad32383b-8c12-494e-b579-e853dbe2d633",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -4112,
+        -64
+      ],
+      "id": "7eb8f1f6-7eb1-4c67-ba36-4d27df48a7f8",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fe16492d-6638-479f-9164-914ca461ea7b",
+              "leftValue": "={{$json.duplicate}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3408,
+        48
+      ],
+      "id": "d15c0ded-4a4a-4919-9cb8-ac7c08c55cea",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "25516dc9-9f32-8020-8232-c243cd1fd63c",
+          "mode": "list",
+          "cachedResultName": "leading_news_log ",
+          "cachedResultUrl": "https://www.notion.so/25516dc99f3280208232c243cd1fd63c"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "llm_score|number",
+              "numberValue": "={{ $json.output.llm_score }}"
+            },
+            {
+              "key": "article_title|rich_text",
+              "textContent": "={{ $json.title }}"
+            },
+            {
+              "key": "article_link|url",
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "created_at|date",
+              "date": "={{$now}}"
+            },
+            {
+              "key": "article_link_hash|rich_text",
+              "textContent": "={{ $json.url_hash }}"
+            },
+            {
+              "key": "from_node|rich_text",
+              "textContent": "gap_analysis_v2"
+            },
+            {
+              "key": "llm_comment|rich_text",
+              "textContent": "={{ $json.output.llm_comment }}"
+            },
+            {
+              "key": "similarity_score|number",
+              "numberValue": "={{ $json.crossBatchScore }}"
+            },
+            {
+              "key": "matching_article_title|rich_text",
+              "textContent": "={{ $json.crossBatchMatchedContent }}"
+            },
+            {
+              "key": "matching_article_url|url",
+              "urlValue": "={{ $json.crossBatchMatchedUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -3200,
+        -128
+      ],
+      "id": "60d5bc27-963d-41e9-965f-a0415436174d",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "hnAefikxkLt13Htp",
+          "name": "leading_news_log"
+        }
+      },
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "# Step 2:  filter duplicate against vector Db past 12 hours",
+        "height": 1104,
+        "width": 3920,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2944,
+        -496
+      ],
+      "typeVersion": 1,
+      "id": "06ae0f20-0c3b-4015-ba3d-f60fac49c617",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const embedding = $json.embedding;   // from OpenAI embeddings response\nconst now = Math.floor(Date.now() / 1000);   // current Unix timestamp\nconst cutoff = now - (24 * 60 * 60);\n         // 12 hours ago in seconds\n\nreturn [\n  {\n    json: {\n      queryBody: {\n        query: embedding,\n        limit: 5,\n        filter: {\n          must: [\n            {\n              key: \"publishedAt\",\n              range: {\n                gte: cutoff,\n                lte: now\n              }\n            }\n          ]\n        },\n        with_payload: true\n      }\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2272,
+        160
+      ],
+      "id": "19312f7f-cfca-4361-ab8f-29665198f74f",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.queryUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "qdrantApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.queryBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1856,
+        144
+      ],
+      "id": "46763d0c-f425-4202-b44a-ad0fb214abe7",
+      "name": "HTTP Request2",
+      "credentials": {
+        "qdrantApi": {
+          "id": "onMzueTVGsSQ4odN",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: response from Query Points\n// Output: array of related docs in the old format\n\nconst results = [];\nfor (const point of $json.result?.points || []) {\n  results.push({\n    json: {\n      document: {\n        pageContent: point.payload.content || \"\",\n        metadata: {\n          url: point.payload.url || null,\n          urlHash: point.payload.urlHash || null,\n          publishedAt: point.payload.publishedAt || null\n        }\n      },\n      score: point.score || 0\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1664,
+        144
+      ],
+      "id": "b4290b8d-e77d-4b92-a3cb-6d6fe3dc6dae",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "id"
+            },
+            {
+              "name": "url"
+            },
+            {
+              "name": "property_url_hash"
+            },
+            {
+              "name": "property_url"
+            },
+            {
+              "name": "property_description"
+            },
+            {
+              "name": "property_content"
+            },
+            {
+              "name": "property_llm_comment"
+            },
+            {
+              "name": "property_published_at",
+              "type": "object"
+            },
+            {
+              "name": "property_post_content"
+            },
+            {
+              "name": "property_llm_score",
+              "type": "number"
+            },
+            {
+              "name": "property_url_to_image"
+            },
+            {
+              "name": "property_author"
+            },
+            {
+              "name": "property_channel_name"
+            },
+            {
+              "name": "property_title"
+            },
+            {
+              "name": "priority_score",
+              "type": "number"
+            },
+            {
+              "name": "property_created_at"
+            },
+            {
+              "name": "property_former_check"
+            },
+            {
+              "name": "channel_name"
+            }
+          ]
+        }
+      },
+      "id": "688c7955-70a7-42cb-81e2-169174dc4fe1",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -4896,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f22f8f5f-43fe-4e54-9da8-0567bbfd0479",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "be6e936e-efb2-4e77-835a-cab067a5ffdd",
+              "name": "url",
+              "value": "={{ $json.url }}",
+              "type": "string"
+            },
+            {
+              "id": "b6dcb9e4-21f6-43ed-86fb-ad0f3b10e0b1",
+              "name": "property_url_hash",
+              "value": "={{ $json.property_url_hash }}",
+              "type": "string"
+            },
+            {
+              "id": "233d01c5-2c56-4ab5-9469-813e6084c3d8",
+              "name": "=property_url",
+              "value": "={{ $json.property_url }}",
+              "type": "string"
+            },
+            {
+              "id": "68437b09-40a3-462e-89e0-e85a4e7cd193",
+              "name": "property_description",
+              "value": "={{ $json.property_description }}",
+              "type": "string"
+            },
+            {
+              "id": "a15f54de-840b-4590-8d28-9b3f28990e71",
+              "name": "property_content",
+              "value": "={{ $json.property_content }}",
+              "type": "string"
+            },
+            {
+              "id": "a3427542-1bdf-4710-933e-44ca3217721e",
+              "name": "property_llm_comment",
+              "value": "={{ $json.property_llm_comment }}",
+              "type": "string"
+            },
+            {
+              "id": "ca3cccec-0eb3-4122-829e-4ff5dce2cc7d",
+              "name": "property_published_at",
+              "value": "={{ $json.property_published_at }}",
+              "type": "object"
+            },
+            {
+              "id": "ae921321-ba0b-4c48-967c-28b324217851",
+              "name": "property_post_content",
+              "value": "={{ $json.property_post_content }}",
+              "type": "string"
+            },
+            {
+              "id": "757b8bdd-36a5-42a4-915c-1f1c8761d063",
+              "name": "property_llm_score",
+              "value": "={{ $json.property_llm_score }}",
+              "type": "number"
+            },
+            {
+              "id": "fd93dada-f25e-4577-a6b3-5755e7fde3f2",
+              "name": "property_url_to_image",
+              "value": "={{ $json.property_url_to_image }}",
+              "type": "string"
+            },
+            {
+              "id": "82c23b80-c748-476c-870b-0d01287f217c",
+              "name": "property_author",
+              "value": "={{ $json.property_author }}",
+              "type": "string"
+            },
+            {
+              "id": "455d236b-2bf0-49f5-8f1c-1e5bb192dd7b",
+              "name": "property_channel_name",
+              "value": "={{ $json.property_channel_name }}",
+              "type": "string"
+            },
+            {
+              "id": "818c4008-832c-44be-89ae-be8dc9e2084a",
+              "name": "property_title",
+              "value": "={{ $json.property_title }}",
+              "type": "string"
+            },
+            {
+              "id": "64e8dfb0-c5e8-4ef1-83af-c5ec6b72321a",
+              "name": "priority_score",
+              "value": "={{ $json.priority_score }}",
+              "type": "number"
+            },
+            {
+              "id": "a863f248-90b7-46ee-bfa3-61475cde33fc",
+              "name": "embedding",
+              "value": "={{ $json.embedding }}",
+              "type": "array"
+            },
+            {
+              "id": "c8bd965a-c64a-4c17-920c-898d731093d9",
+              "name": "=property_created_at",
+              "value": "="{{ $json.property_created_at }}",
+              "type": "string"
+            },
+            {
+              "id": "95b3f54a-2e8d-401e-95d8-c4bc59592d57",
+              "name": "=property_former_check",
+              "value": "={{ $json.property_former_check }}",
+              "type": "string"
+            },
+            {
+              "id": "cf5fd15d-0831-447a-b879-bdbe98989315",
+              "name": "=channel_name",
+              "value": "={{ $json.channel_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2496,
+        112
+      ],
+      "id": "3d276e92-b8eb-48b4-9f48-91656f864b94",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const postContent  = ($json.property_post_content || '').replace(/\\s+/g, ' ').trim();\n\nreturn {\n  ...$json,\n  textForEmbedding: `${postContent}`\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4624,
+        160
+      ],
+      "id": "56d0c728-1d5a-4296-a3fd-feb47f0383aa",
+      "name": "Prepare Text for Embedding"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    id: $json.id,\n    url: $json.url,\n    property_title: $json.property_title,\n    property_description: $json.property_description,\n    property_author: $json.property_author,\n    property_published_at: $json.property_published_at,\n    property_url_to_image:$json. property_url_to_image,\n    property_url_hash: $json.property_url_hash,\n    property_url: $json.property_url,\n    property_channel_name: $json.property_channel_name,\n    property_llm_score: $json.property_llm_score,\n    property_llm_comment: $json.property_llm_comment,\n    property_post_content: $json.property_post_content,\n    priority_score: $json.priority_score,\n    property_content: $json.property_content,\n    property_created_at: $json.property_created_at,\n    channel_name: $json.channel_name,\n    property_former_check: $json.property_former_check,\n    textForEmbedding: $json.textForEmbedding,\n    embedding: $json.data[0].embedding // extract clean vector\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3840,
+        32
+      ],
+      "id": "cf1cfc6e-2f6b-41e3-9511-6b8bd12145e5",
+      "name": "simply json"
+    },
+    {
+      "parameters": {
+        "content": "fecth posts from vector database past 12 hours",
+        "height": 528,
+        "width": 976
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2544,
+        -48
+      ],
+      "id": "8c52e678-7976-44ee-918f-be27bd7459dc",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const embedding = $json.embedding;   // from OpenAI embeddings response\nconst now = Math.floor(Date.now() / 1000);   // current Unix timestamp\n//const cutoff = now - (12 * 60 * 60);         // 12 hours ago\n         // 12 hours ago in seconds\nconst cutoffStart = now - (24 * 60 * 60); // 24h ago\nconst cutoffEnd = now - (12 * 60 * 60);   // 12h ago\n\nreturn [\n  {\n    json: {\n      queryBody: {\n        query: embedding,\n        limit: 5,\n        filter: {\n          must: [\n            {\n              key: \"publishedAt\",\n              range: {\n                gte: cutoffStart,\n                lte: cutoffEnd\n              }\n            }\n          ]\n        },\n        with_payload: true\n      }\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        1472
+      ],
+      "id": "09e6c13e-47d1-45a1-8572-1602cf21a984",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: response from Query Points\n// Output: array of related docs in the old format\n\nconst results = [];\nfor (const point of $json.result?.points || []) {\n  results.push({\n    json: {\n      document: {\n        pageContent: point.payload.content || \"\",\n        metadata: {\n          url: point.payload.url || null,\n          urlHash: point.payload.urlHash || null,\n          publishedAt: point.payload.publishedAt || null\n        }\n      },\n      score: point.score || 0\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        1472
+      ],
+      "id": "57fb4dd8-0713-4cea-90f0-8d840963e9ef",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        736,
+        1168
+      ],
+      "id": "b93e5246-c1dd-4fea-83bf-417f477beb67",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// items[0] = original article\n// items[1..N] = related articles from Qdrant\n\nconst original = items[0].json;\n// Grab related ones (they have `score`)\nconst related = items.slice(1).filter(i => i.json.score !== undefined);\n\n// Flag: do we have any related?\nconst hasArticles = related.length > 0;\n\n// Collect scores and preserve full related docs\nconst relatedScores = related.map(r => r.json.score);\nconst relatedArticles = related.map(r => r.json);\n\n// Return the original article enriched with related info\nreturn [\n  {\n    json: {\n      ...original,\n      hasArticles,\n      relatedScores,\n      relatedArticles\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1184
+      ],
+      "id": "1b2d7711-cb2d-4809-a860-d80c6add25e4",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "896170fd-d86c-49e3-8a9a-6af432abed56",
+              "leftValue": "={{ $json.hasArticles }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1232,
+        1216
+      ],
+      "id": "1655938e-1d3d-4015-8d05-c375faad44c6",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const scores = $json.relatedScores || [];\nconst matches = $json.relatedArticles || [];\nconst threshold = 0.80;\n\nlet hasHighScore = false;\nlet bestScore = null;\nlet bestMatch = null;\n\nfor (let i = 0; i < scores.length; i++) {\n  const score = scores[i];\n  if (score > threshold) {\n    hasHighScore = true;\n  }\n  if (bestScore === null || score > bestScore) {\n    bestScore = score;\n    bestMatch = matches[i];\n  }\n}\n\nreturn [\n  {\n    json: {\n      id: $json.id,\n      url: $json.url,\n      property_title: $json.property_title,\n      property_description: $json.property_description,\n      property_author: $json.property_author,\n      property_published_at: $json.property_published_at,\n      property_url_to_image:$json. property_url_to_image,\n      property_url_hash: $json.property_url_hash,\n      property_url: $json.property_url,\n      property_channel_name: $json.property_channel_name,\n      property_llm_score: $json.property_llm_score,\n      property_llm_comment: $json.property_llm_comment,\n      property_post_content: $json.property_post_content,\n      priority_score: $json.priority_score,\n      property_content: $json.property_content,\n      property_created_at: $json.property_created_at,\n      property_former_check: $json.property_former_check,\n      embedding: $json.embedding,\n\n      // Step 2 dedup info\n      duplicate: hasHighScore,\n      crossBatchScore: bestScore,\n      crossBatchMatchedUrl: bestMatch?.document?.metadata?.url || null,\n      crossBatchMatchedContent: bestMatch?.document?.pageContent || null\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        1536
+      ],
+      "id": "db6af40c-a64b-4f14-86b6-92ad46dc5e82",
+      "name": "Code7"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8adb4d51-040d-452e-8136-1eea5e14df0d",
+              "leftValue": "={{$json.duplicate}}",
+              "reflexValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        1552
+      ],
+      "id": "aa49d4ae-3ace-48ea-aee7-3d3fc46524f3",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://c5b2ac61-ea4d-4482-8bed-059f617947ae.europe-west3-0.gcp.cloud.qdrant.io/collections/am1st_posting_news_embedding/points/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "qdrantApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.queryBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        1472
+      ],
+      "id": "35890c62-4d9a-4f7d-991f-7de20093d7fb",
+      "name": "HTTP Request4",
+      "credentials": {
+        "qdrantApi": {
+          "id": "onMzueTVGsSQ4odN",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Layer 3:  filter duplicate against vector Db past 24 hours (THIS PART IS NOT IN USE)\n",
+        "height": 1072,
+        "width": 3472,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -832,
+        960
+      ],
+      "typeVersion": 1,
+      "id": "93b4fd41-43c7-43ed-90af-bed85c4a80d3",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      id: $json.id,\n      url: $json.url,\n      property_title: $json.property_title,\n      property_description: $json.property_description,\n      property_author: $json.property_author,\n      property_published_at: $json.property_published_at,\n      property_url_to_image:$json. property_url_to_image,\n      property_url_hash: $json.property_url_hash,\n      property_url: $json.property_url,\n      property_channel_name: $json.property_channel_name,\n      property_llm_score: $json.property_llm_score,\n      property_llm_comment: $json.property_llm_comment,\n      property_post_content: $json.property_post_content,\n      property_former_check: $json.property_former_check,\n      priority_score: $json.priority_score,\n      property_content: $json.property_content,\n      property_created_at: $json.property_created_at,\n      embedding: $json.embedding,\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        1072
+      ],
+      "id": "d6422194-a0ee-42cb-9aab-62599644d20e",
+      "name": "Code in JavaScript4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f22f8f5f-43fe-4e54-9da8-0567bbfd0479",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "be6e936e-efb2-4e77-835a-cab067a5ffdd",
+              "name": "url",
+              "value": "={{ $json.url }}",
+              "type": "string"
+            },
+            {
+              "id": "b6dcb9e4-21f6-43ed-86fb-ad0f3b10e0b1",
+              "name": "property_url_hash",
+              "value": "={{ $json.property_url_hash }}",
+              "type": "string"
+            },
+            {
+              "id": "233d01c5-2c56-4ab5-9469-813e6084c3d8",
+              "name": "=property_url",
+              "value": "={{ $json.property_url }}",
+              "type": "string"
+            },
+            {
+              "id": "68437b09-40a3-452e-9470-465b192dd7b",
+              "name": "property_description",
+              "value": "={{ $json.property_description }}",
+              "type": "string"
+            },
+            {
+              "id": "a15f54de-840b-4590-8d28-9b3f28990e71",
+              "name": "property_content",
+              "value": "={{ $json.property_content }}",
+              "type": "string"
+            },
+            {
+              "id": "a3427542-1bdf-4710-933e-44ca3217721e",
+              "name": "property_llm_comment",
+              "value": "={{ $json.property_llm_comment }}",
+              "type": "string"
+            },
+            {
+              "id": "ca3cccec-0eb3-4122-829e-4ff5dce2cc7d",
+              "name": "property_published_at",
+              "value": "={{ $json.property_published_at }}",
+              "type": "object"
+            },
+            {
+              "id": "ae921321-ba0b-4c48-967c-28b324217851",
+              "name": "property_post_content",
+              "value": "={{ $json.property_post_content }}",
+              "type": "string"
+            },
+            {
+              "id": "757b8bdd-36a5-42a4-915c-1f1c8761d063",
+              "name": "property_llm_score",
+              "value": "={{ $json.property_llm_score }}",
+              "type": "number"
+            },
+            {
+              "id": "fd93dada-f25e-4577-a6b3-5755e7fde3f2",
+              "name": "property_url_to_image",
+              "value": "={{ $json.property_url_to_image }}",
+              "type": "string"
+            },
+            {
+              "id": "82c23b80-c748-476c-870b-0d01287f217c",
+              "name": "property_author",
+              "value": "={{ $json.property_author }}",
+              "type": "string"
+            },
+            {
+              "id": "455d236b-2bf0-49f5-8f1c-1e5bb192dd7b",
+              "name": "property_channel_name",
+              "value": "={{ $json.property_channel_name }}",
+              "type": "string"
+            },
+            {
+              "id": "818c4008-832c-44be-89ae-be8dc9e2084a",
+              "name": "property_title",
+              "value": "={{ $json.property_title }}",
+              "type": "string"
+            },
+            {
+              "id": "64e8dfb0-c5e8-4ef1-83af-c5ec6b72321a",
+              "name": "priority_score",
+              "value": "={{ $json.priority_score }}",
+              "type": "number"
+            },
+            {
+              "id": "871e51a6-caee-4364-a633-aaf2646a7a43",
+              "name": "property_created_at",
+              "value": "="{{ $json.property_created_at }}",
+              "type": "string"
+            },
+            {
+              "id": "7f1ebbc0-9c11-49ca-b85d-bb5e473db05c",
+              "name": "=property_former_check",
+              "value": "={{ $json.property_former_check }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -496,
+        1280
+      ],
+      "id": "9bbb1fc6-3fd5-47fe-a0e5-b402fc1f1bfe",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f22f8f5f-43fe-4e54-9da8-0567bbfd0479",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "be6e936e-efb2-4e77-835a-cab067a5ffdd",
+              "name": "url",
+              "value": "={{ $json.url }}",
+              "type": "string"
+            },
+            {
+              "id": "b6dcb9e4-21f6-43ed-86fb-ad0f3b10e0b1",
+              "name": "property_url_hash",
+              "value": "="{{ $json.property_url_hash }}",
+              "type": "string"
+            },
+            {
+              "id": "233d01c5-2c56-4ab5-9469-813e6084c3d8",
+              "name": "=property_url",
+              "value": "={{ $json.property_url }}",
+              "type": "string"
+            },
+            {
+              "id": "68437b09-40a3-462e-89e0-e85a4e7cd193",
+              "name": "property_description",
+              "value": "={{ $json.property_description }}",
+              "type": "string"
+            },
+            {
+              "id": "a15f54de-840b-4590-8d28-9b3f28990e71",
+              "name": "property_content",
+              "value": "="{{ $json.property_content }}",
+              "type": "string"
+            },
+            {
+              "id": "a3427542-1bdf-4710-933e-44ca3217721e",
+              "name": "property_llm_comment",
+              "value": "={{ $json.property_llm_comment }}",
+              "type": "string"
+            },
+            {
+              "id": "ca3cccec-0eb3-4122-829e-4ff5dce2cc7d",
+              "name": "property_published_at",
+              "value": "={{ $json.property_published_at }}",
+              "type": "object"
+            },
+            {
+              "id": "ae921321-ba0b-4c48-967c-28b324217851",
+              "name": "property_post_content",
+              "value": "={{ $json.property_post_content }}",
+              "type": "string"
+            },
+            {
+              "id": "757b8bdd-36a5-42a4-915c-1f1c8761d063",
+              "name": "property_llm_score",
+              "value": "={{ $json.property_llm_score }}",
+              "type": "number"
+            },
+            {
+              "id": "fd93dada-f25e-4577-a6b3-5755e7fde3f2",
+              "name": "property_url_to_image",
+              "value": "={{ $json.property_url_to_image }}",
+              "type": "string"
+            },
+            {
+              "id": "82c23b80-c748-476c-870b-0d01287f217c",
+              "name": "property_author",
+              "value": "={{ $json.property_author }}",
+              "type": "string"
+            },
+            {
+              "id": "455d236b-2bf0-49f5-8f1c-1e5bb192dd7b",
+              "name": "property_channel_name",
+              "value": "={{ $json.property_channel_name }}",
+              "type": "string"
+            },
+            {
+              "id": "818c4008-832c-44be-89ae-be8dc9e2084a",
+              "name": "property_title",
+              "value": "={{ $json.property_title }}",
+              "type": "string"
+            },
+            {
+              "id": "64e8dfb0-c5e8-4ef1-83af-c5ec6b72321a",
+              "name": "priority_score",
+              "value": "={{ $json.priority_score }}",
+              "type": "number"
+            },
+            {
+              "id": "871e51a6-caee-4364-a633-aaf2646a7a43",
+              "name": "property_created_at",
+              "value": "="{{ $json.property_created_at }}",
+              "type": "string"
+            },
+            {
+              "id": "4ee52b08-b0ae-4e93-9cb4-0712bac9ef3d",
+              "name": "duplicate",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "0d570eec-f60c-4470-8dca-67c0f2b7e204",
+              "name": "crossBatchMatchedUrl",
+              "value": "={{ $json.crossBatchMatchedUrl  }}",
+              "type": "string"
+            },
+            {
+              "id": "a30ac938-fccf-411c-a5a6-e07c12520c2c",
+              "name": "crossBatchMatchedContent",
+              "value": "={{ $json.crossBatchMatchedContent }}",
+              "type": "string"
+            },
+            {
+              "id": "b5c49715-f865-413c-a87c-4bc947e83ade",
+              "name": "crossBatchScore",
+              "value": "={{ $json.crossBatchScore }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -144,
+        -144
+      ],
+      "id": "e4b6468e-4176-4d47-8747-97d80ae194bb",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Decide which Qdrant collection to query based on the \"source\" field\nlet collection;\n\nif ( $('Edit Fields1').first().json.channel_name === \"am1st\") {\n  collection = \"am1st_posting_news_embedding\";\n} else if ($('Edit Fields1').first().json.channel_name === \"marketwatcher\") {\n   collection = \"market_watcher_news_posting_embedding\";\n} else if ($('Edit Fields1').first().json.channel_name === \"chinabreaks\") {\n   collection = \"china_break_news_posting_embedding\";\n} else if ($('Edit Fields1').first().json.channel_name === \"globalbrief\") {\n   collection = \"global_brief_news_posting_embedding\";\n} else if ($('Edit Fields1').first().json.channel_name === \"geopulse\") {\n   collection = \"geo_pulse_news_posting_embedding\";\n}\nelse {\n    collection = \"Leading_news_posting_embedding\";\n \n // Leading_news_posting_embedding\n} \n\n// Build dynamic queryUrl\nreturn [{\n  json: {\n    ...$json,\n    queryUrl: `https://c5b2ac61-ea4d-4482-8bed-059f617947ae.europe-west3-0.gcp.cloud.qdrant.io/collections/${collection}/points/query`\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2096,
+        160
+      ],
+      "id": "e69acf53-140d-4d96-bbfb-99d1c1281091",
+      "name": "Code in JavaScript5"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "id": "2a916dc9-9f32-81c3-a0c9-da282798a01c",
+          "url": "https://www.notion.so/JPMorgan-Launches-Deposit-Token-JPM-Coin-for-Institutional-Clients-2a916dc99f3281c3a0c9da282798a01c",
+          "property_url_hash": "d8be80a4165a4b58",
+          "property_url": "https://www.financemagnates.com/cryptocurrency/jpmorgan-launches-deposit-token-jpm-coin-for-institutional-clients/",
+          "property_description": "JPMorgan Chase has started to roll out JPM Coin...",
+          "property_post_content": "JPMorgan launches JPM Coin for institutional clients, enhancing digital asset offerings amid growing demand for blockchain-based financial solutions.",
+          "property_llm_score": 8,
+          "property_title": "JPMorgan Launches Deposit Token JPM Coin for Institutional Clients",
+          "priority_score": 8,
+          "channel_name": "marketwatcher"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Merge": {
+      "main": [[{"node": "Code2", "type": "main", "index": 0}]]
+    },
+    "If1": {
+      "main": [
+        [{"node": "Code", "type": "main", "index": 0}],
+        [{"node": "Code1", "type": "main", "index": 0}]
+      ]
+    },
+    "Code2": {
+      "main": [[{"node": "If1", "type": "main", "index": 0}]]
+    },
+    "Code1": {
+      "main": [[{"node": "If", "type": "main", "index": 0}]]
+    },
+    "If": {
+      "main": [
+        [{"node": "Create a database page1", "type": "main", "index": 0}],
+        [{"node": "Code3", "type": "main", "index": 0}]
+      ]
+    },
+    "Code3": {
+      "main": [[{"node": "Merge1", "type": "main", "index": 2}]]
+    },
+    "Loop Over Items": {
+      "main": [
+        [{"node": "Code5", "type": "main", "index": 0}],
+        [{"node": "Edit Fields1", "type": "main", "index": 0}]
+      ]
+    },
+    "Create a database page1": {
+      "main": [[{"node": "Edit Fields", "type": "main", "index": 0}]]
+    },
+    "Merge1": {
+      "main": [[{"node": "Code4", "type": "main", "index": 0}]]
+    },
+    "Code4": {
+      "main": [[{"node": "Loop Over Items", "type": "main", "index": 0}]]
+    },
+    "Edit Fields2": {"main": [[]]},
+    "BatchDedup": {
+      "main": [[{"node": "If2", "type": "main", "index": 0}]]
+    },
+    "HTTP Request": {
+      "main": [[{"node": "Merge2", "type": "main", "index": 1}]]
+    },
+    "Merge2": {
+      "main": [[{"node": "simply json", "type": "main", "index": 0}]]
+    },
+    "If2": {
+      "main": [
+        [{"node": "Create a database page", "type": "main", "index": 0}],
+        [{"node": "Loop Over Items", "type": "main", "index": 0}]
+      ]
+    },
+    "Code5": {"main": [[]]},
+    "Code": {
+      "main": [[{"node": "Merge1", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript2": {
+      "main": [[{"node": "Code in JavaScript5", "type": "main", "index": 0}]]
+    },
+    "HTTP Request2": {
+      "main": [[{"node": "Code in JavaScript", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript": {
+      "main": [[{"node": "Merge", "type": "main", "index": 1}]]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {"node": "Prepare Text for Embedding", "type": "main", "index": 0},
+          {"node": "Merge2", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {"node": "Code in JavaScript2", "type": "main", "index": 0},
+          {"node": "Merge", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Prepare Text for Embedding": {
+      "main": [[{"node": "HTTP Request", "type": "main", "index": 0}]]
+    },
+    "simply json": {
+      "main": [[{"node": "BatchDedup", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript1": {
+      "main": [[{"node": "HTTP Request4", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript3": {
+      "main": [[{"node": "Merge3", "type": "main", "index": 1}]]
+    },
+    "Merge3": {
+      "main": [[{"node": "Code6", "type": "main", "index": 0}]]
+    },
+    "Code6": {
+      "main": [[{"node": "If3", "type": "main", "index": 0}]]
+    },
+    "If3": {
+      "main": [
+        [],
+        [{"node": "Code7", "type": "main", "index": 0}]
+      ]
+    },
+    "Code7": {
+      "main": [[{"node": "If4", "type": "main", "index": 0}]]
+    },
+    "HTTP Request4": {
+      "main": [[{"node": "Code in JavaScript3", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript4": {
+      "main": [[{"node": "Edit Fields3", "type": "main", "index": 0}]]
+    },
+    "If4": {"main": [[], []]},
+    "Edit Fields3": {
+      "main": [[{"node": "Code in JavaScript1", "type": "main", "index": 0}]]
+    },
+    "Edit Fields": {
+      "main": [[{"node": "Merge1", "type": "main", "index": 1}]]
+    },
+    "Code in JavaScript5": {
+      "main": [[{"node": "HTTP Request2", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 600
+  },
+  "versionId": "40a37455-f37c-46de-b7d2-f25a16b418f4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e6593d626249f18d4ea46b1e2d74b0cb02dbef44c65795773b125c013f6eb8da"
+  },
+  "id": "grGW1EpS3cUGQq3L",
+  "tags": []
+}

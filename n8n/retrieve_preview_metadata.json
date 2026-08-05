@@ -1,0 +1,1457 @@
+{
+  "name": "retrieve_preview_metadata",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// n8n Code Node: Extract URLs with specific format\n// FIXED: Preserve original post data while adding URL information\n// FIXED: Maintain same number of output items as input items\n\n// Define media file extensions\nconst imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico'];\nconst videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', 'mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a', 'wma'];\n\n// URL regex pattern\nconst urlRegex = /https?:\\/\\/[^\\s<>\"{}|\\\\^`[\\]]+/gi;\n\n// Function to determine URL type\nfunction getUrlType(url) {\n  const lowerUrl = url.toLowerCase();\n  \n  // Check for image extensions\n  if (imageExtensions.some(ext => lowerUrl.includes(`.${ext}`))) {\n    return 'image';\n  }\n  \n  // Check for video/audio extensions\n  if (videoExtensions.some(ext => lowerUrl.includes(`.${ext}`))) {\n    return 'video';\n  }\n  \n  // Default to page for all other URLs\n  return 'page';\n}\n\n// Function to clean URL (remove trailing punctuation)\nfunction cleanUrl(url) {\n  return url.replace(/[.,;:!?)\\]}>]+$/, '');\n}\n\n// Process input data - maintain same number of items as input\nconst results = [];\n\nfor (const item of $input.all()) {\n  const text = item.json.text;\n  \n  // Initialize result item with all original data\n  const resultItem = {\n    json: {\n      // Preserve all original post data\n      ...item.json,\n      // Initialize URL fields as null\n      url_text_type: null,\n      url_text: null\n    }\n  };\n  \n  // Only process if text exists and is a string\n  if (text && typeof text === 'string') {\n    // Extract all URLs from text\n    const foundUrls = text.match(urlRegex) || [];\n    \n    if (foundUrls.length > 0) {\n      // Take the first valid URL found\n      for (let url of foundUrls) {\n        // Clean the URL\n        url = cleanUrl(url);\n        \n        // Only include valid web URLs (starts with http/https)\n        if (url.startsWith('http://') || url.startsWith('https://')) {\n          const urlType = getUrlType(url);\n          \n          // Set URL information for this item\n          resultItem.json.url_text_type = urlType;\n          resultItem.json.url_text = url;\n          break; // Only take the first valid URL\n        }\n      }\n    }\n  }\n  \n  // Always add the item to results (maintaining input/output count)\n  results.push(resultItem);\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        624
+      ],
+      "id": "6e772774-aa6e-4925-b66f-23e2a5b0a463",
+      "name": "Extract URL"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * N8N Code Node to extract metadata from HTML content (Pure JavaScript).\n *\n * This code uses pure JavaScript string processing and regular expressions\n * to extract metadata from HTML content. No external modules or DOM APIs required.\n * \n * FIXED: \n * - Now processes ALL items in the input array, not just the first one\n * - Fixed undefined URL issue by ensuring all functions return null instead of undefined\n * - Enhanced regex patterns for better YouTube and other site compatibility\n * - Added better error handling and debugging\n * MODIFIED:\n * - Explicitly add 'text', 'created_at', and 'url_text' to the output JSON from the input item.\n */\n\n/**\n * Helper function to decode HTML entities\n * @param {string} str - The string to decode\n * @returns {string} Decoded string\n */\nconst decodeHtmlEntities = (str) => {\n  if (!str) return str;\n  return str\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&amp;/g, '&')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#x27;/g, \"'\")\n    .replace(/&#39;/g, \"'\")\n    .replace(/&#x2F;/g, '/')\n    .replace(/&#47;/g, '/')\n    .replace(/\\s+/g, ' ')\n    .trim();\n};\n\n/**\n * Helper function to extract content from meta tags using regex\n * @param {string} html - The HTML content to search\n * @param {string} property - The property or name value to search for\n * @returns {string | null} The content of the meta tag, or null if not found\n */\nconst getMetaContent = (html, property) => {\n  if (!html || !property) return null;\n  \n  // Escape special regex characters in property name\n  const escapedProperty = property.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n  \n  // Try different patterns for meta tags with property attribute\n  const propertyPatterns = [\n    // Standard: <meta property=\"...\" content=\"...\">\n    new RegExp(`<meta[^>]+property=[\"']${escapedProperty}[\"'][^>]*content=[\"']([^\"']*?)[\"'][^>]*>`, 'i'),\n    // Reversed: <meta content=\"...\" property=\"...\">\n    new RegExp(`<meta[^>]+content=[\"']([^\"']*?)[\"'][^>]*property=[\"']${escapedProperty}[\"'][^>]*>`, 'i'),\n    // Without quotes: <meta property=... content=...>\n    new RegExp(`<meta[^>]+property=${escapedProperty}[^>]*content=[\"']([^\"']*?)[\"'][^>]*>`, 'i'),\n  ];\n  \n  // Try different patterns for meta tags with name attribute\n  const namePatterns = [\n    // Standard: <meta name=\"...\" content=\"...\">\n    new RegExp(`<meta[^>]+name=[\"']${escapedProperty}[\"'][^>]*content=[\"']([^\"']*?)[\"'][^>]*>`, 'i'),\n    // Reversed: <meta content=\"...\" name=\"...\">\n    new RegExp(`<meta[^>]+content=[\"']([^\"']*?)[\"'][^>]*name=[\"']${escapedProperty}[\"'][^>]*>`, 'i'),\n    // Without quotes: <meta name=... content=...>\n    new RegExp(`<meta[^>]+name=${escapedProperty}[^>]*content=[\"']([^\"']*?)[\"'][^>]*>`, 'i'),\n  ];\n  \n  // Try all patterns\n  const allPatterns = [...propertyPatterns, ...namePatterns];\n  \n  for (const regex of allPatterns) {\n    const match = html.match(regex);\n    if (match && match[1]) {\n      return decodeHtmlEntities(match[1]) || null;\n    }\n  }\n  \n  return null;\n};\n\n/**\n * Helper function to extract title from <title> tag\n * @param {string} html - The HTML content to search\n * @returns {string | null} The title text, or null if not found\n */\nconst getTitleContent = (html) => {\n  if (!html) return null;\n  \n  const regex = /<title[^>]*>(.*?)<\\/title>/is;\n  const match = html.match(regex);\n  if (match && match[1]) {\n    return decodeHtmlEntities(match[1]) || null;\n  }\n  return null;\n};\n\n/**\n * Helper function to extract canonical URL from link tag\n * @param {string} html - The HTML content to search\n * @returns {string | null} The canonical URL, or null if not found\n */\nconst getCanonicalUrl = (html) => {\n  if (!html) return null;\n  \n  const patterns = [\n    // Standard: <link rel=\"canonical\" href=\"...\">\n    /<link[^>]+rel=[\"']canonical[\"'][^>]*href=[\"']([^\"']*?)[\"'][^>]*>/i,\n    // Reversed: <link href=\"...\" rel=\"canonical\">\n    /<link[^>]+href=[\"']([^\"']*?)[\"'][^>]*rel=[\"']canonical[\"'][^>]*>/i,\n    // Without quotes\n    /<link[^>]+rel=canonical[^>]*href=[\"']([^\"']*?)[\"'][^>]*>/i,\n  ];\n  \n  for (const regex of patterns) {\n    const match = html.match(regex);\n    if (match && match[1]) {\n      return match[1] || null;\n    }\n  }\n  \n  return null;\n};\n\n/**\n * Helper function to extract URL from window.location or other JavaScript variables\n * @param {string} html - The HTML content to search\n * @returns {string | null} The URL, or null if not found\n */\nconst getJavaScriptUrl = (html) => {\n  if (!html) return null;\n  \n  // Try to find YouTube's canonical URL in script tags\n  const youtubePatterns = [\n    /\"canonicalBaseUrl\":\"([^\"]+)\"/,\n    /\"webPageUrl\":\"([^\"]+)\"/,\n    /window\\.location\\.href\\s*=\\s*[\"']([^\"']+)[\"']/,\n    /canonical_url[\"']\\s*:\\s*[\"']([^\"']+)[\"']/,\n  ];\n  \n  for (const regex of youtubePatterns) {\n    const match = html.match(regex);\n    if (match && match[1]) {\n      // YouTube URLs might need to be constructed\n      let url = match[1];\n      if (url.startsWith('/watch')) {\n        url = 'https://www.youtube.com' + url;\n      }\n      return url || null;\n    }\n  }\n  \n  return null;\n};\n\n/**\n * Process a single item to extract metadata\n * @param {object} item - Single item from the input array\n * @returns {object} Processed item with metadata\n */\nconst processItem = (item) => {\n  // Ensure we have valid input\n  if (!item || !item.json) {\n    return { json: { metadata: { url: null, title: null, description: null, imageUrl: null } } };\n  }\n  \n  const htmlContent = item.json.data;\n  \n  // If no HTML content, return empty metadata\n  if (!htmlContent || typeof htmlContent !== 'string') {\n    return { \n      json: {        \n        metadata: { url: null, title: null, description: null, imageUrl: null },\n        text: item.json.text,\n        created_at: item.json.created_at,\n        url_text: item.json.url_text,\n      }\n    };\n  }\n  \n  // Extract metadata with fallback priorities\n  let url = getMetaContent(htmlContent, 'og:url') || \n           getMetaContent(htmlContent, 'twitter:url') || \n           getCanonicalUrl(htmlContent) ||\n           getJavaScriptUrl(htmlContent);\n  \n  // Ensure url is null instead of undefined\n  url = url || null;\n\n  let title = getMetaContent(htmlContent, 'og:title') || \n             getMetaContent(htmlContent, 'twitter:title') || \n             getTitleContent(htmlContent);\n  \n  // Clean up title - remove common suffixes like \"- YouTube\"\n  if (title) {\n    title = title.replace(/\\s*-\\s*YouTube\\s*$/, '').trim() || title;\n  }\n  title = title || null;\n\n  let description = getMetaContent(htmlContent, 'og:description') || \n                   getMetaContent(htmlContent, 'twitter:description') || \n                   getMetaContent(htmlContent, 'description');\n  description = description || null;\n\n  let imageUrl = getMetaContent(htmlContent, 'og:image') || \n                getMetaContent(htmlContent, 'twitter:image') ||\n                getMetaContent(htmlContent, 'og:image:url');\n  imageUrl = imageUrl || null;\n\n  // Construct the metadata object - ensure all values are null instead of undefined\n  const metadata = {\n    url: url,\n    title: title,\n    description: description,\n    imageUrl: imageUrl,\n  };\n\n  // Return the extracted metadata along with original data\n  return {\n    json: {      \n      metadata: metadata,  // Add extracted metadata\n      text: item.json.text,\n      created_at: item.json.created_at,\n      url_text: item.json.url_text,\n    }\n  };\n};\n\n// Ensure items exists and is an array\nif (!items || !Array.isArray(items)) {\n  return [{ json: { error: 'No valid input items found' } }];\n}\n\n// Process ALL items in the input array\nconst results = items.map(processItem);\n\n// Return all processed results\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        1248
+      ],
+      "id": "17970785-aca6-484a-9a88-2149dcb5acbb",
+      "name": "Extract Page Metadata",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3568,
+        400
+      ],
+      "id": "66a81b7b-95d8-45b1-9810-bad782c41d4b",
+      "name": "Merge_Metadata",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.urlmeta.org/meta",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.url_text }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1264,
+        384
+      ],
+      "id": "1dd9230c-aad4-41d8-8f86-9465c74f5043",
+      "name": "UrlMetadata",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6206vLnDeBapFSAw",
+          "name": "URLMeta_key_Gettr_content"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.url_text?.toLowerCase() || \"\" }}",
+                    "rightValue": "youtube.com/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "76695c5e-c54d-4581-a95b-9c1e181c75c3"
+                  },
+                  {
+                    "leftValue": "={{ $json.url_text?.toLowerCase() || \"\" }}",
+                    "rightValue": "youtu.be/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "408799f5-115c-4798-b58a-9f0ee44fc5ab"
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "YOUTUBE_API"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.url_text?.toLowerCase() || \"\" }}",
+                    "rightValue": "x.com/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "013d7f71-8509-4329-98e5-1f76b43539fc"
+                  },
+                  {
+                    "leftValue": "={{ $json.url_text?.toLowerCase() || \"\" }}",
+                    "rightValue": "facebook.com/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "408799f5-115c-4798-b58a-8976y44fc5ab"
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "URLMETA_API"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "bc6369a5-63ca-4d79-ae89-56b97348cd33",
+                    "leftValue": "={{ !$json.has_preview  }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NO_PREVIEW"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "OTHERS",
+          "allMatchingOutputs": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        608,
+        432
+      ],
+      "id": "922dabdd-8314-42de-802d-ce853e53ae5c",
+      "name": "Switch",
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/videos",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.youtube_vid}}"
+            },
+            {
+              "name": "part",
+              "value": "snippet"
+            },
+            {
+              "name": "key",
+              "value": "AIzaSyCKmo1qVzsjMelYL1ZurAaA3ZnSaVk8pBY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1264,
+        -176
+      ],
+      "id": "3e1fdc06-b893-4c37-b7b5-80fc7e9ef02b",
+      "name": "YoutubeAPI"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform YouTube API response to metadata format (robust version)\n// MODIFIED:\n// - Preserve original fields (text, created_at, url_text, etc.) even when the API response is invalid.\n// - Cleaned up object creation to be more DRY.\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const data = item.json;\n\n  // Define a base object with the fields from the input that we want to preserve.\n  // This ensures these fields are always included in the output.\n  const baseJson = {\n    text: item.json?.text,\n    created_at: item.json?.created_at,        \n    url_text: item.json?.url_text\n  };\n\n  // If the API response is abnormal, return placeholder metadata,\n  // but ensure the original data fields are preserved.\n  if (!data || !Array.isArray(data.items) || data.items.length === 0) {\n    results.push({\n      json: {\n        ...baseJson,\n        metadata: { title: null, description: null, imageUrl: null },\n      },\n    });\n    continue;\n  }\n\n  // Extract metadata from the valid API response.\n  const snippet = data.items[0]?.snippet ?? {};\n  const title = snippet.title ?? null;\n  const description = snippet.description ? snippet.description.slice(0, 500) : null;\n\n  const thumbs = snippet.thumbnails ?? {};\n  const thumbnailUrl =\n    thumbs.maxres?.url ||\n    thumbs.standard?.url ||\n    thumbs.high?.url ||\n    thumbs.medium?.url ||\n    thumbs.default?.url ||\n    null;\n\n  // Push the final result, combining the preserved original fields\n  // with the new metadata from YouTube.\n  results.push({\n    json: {\n      ...baseJson,\n      metadata: {\n        title,\n        description,\n        imageUrl: thumbnailUrl,\n      },\n    },\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -64
+      ],
+      "id": "38a82d13-6263-4951-a8a9-9d0dea1060be",
+      "name": "data_transf_for_youtube_api"
+    },
+    {
+      "parameters": {
+        "jsCode": "const REMOVE_RE = /\\s*\\(formerly\\s+twitter\\)\\s*/i;\n\nconst clean = s => (s || '').replace(REMOVE_RE, '').trim() || null;\n\nconst results = [];\n\nconst isImageUrl = (url) => {\n  if (!url || typeof url !== 'string') {\n    return false;\n  }\n  return /\\.(jpg|jpeg|png|gif|bmp|webp|svg)(?:\\?.*)?$/i.test(url);\n};\n\nfor (const item of $input.all()) {\n  const json = item.json ?? {};\n  let title = null, description = null, imageUrl = null;\n  let text = null, created_at = null, url_text = null;\n\n  // Check if this is a \"data\" type structure (alternate format)\n  if (json.data && typeof json.data === 'object') {\n    const data = json.data;\n    title = clean(data.title);\n    description = clean(data.description);\n    imageUrl = data.image || data.logo || null;\n    text = data.headline || data.title || null;\n    created_at = json.timestamp || data.date || null;\n    url_text = data.url || json.meta?.url || null;\n  } else {\n    // Original structure\n    const meta = json.meta ?? {};\n    const site = meta.site ?? {};\n    text = json.text;\n    url_text = json.url_text;\n    created_at = json.created_at;\n\n    if (isImageUrl(url_text)) {\n      title = null;\n      description = null;\n      imageUrl = null;\n    } else {\n      title = clean(meta.title);\n      const siteName = clean(site.name);\n      const canonical = site.canonical ?? '';\n      imageUrl = meta.image ?? null;\n\n      if (siteName && canonical)      description = `${siteName} - ${canonical}`;\n      else if (siteName)              description = siteName;\n      else if (canonical)             description = canonical;\n\n      description = clean(description);\n    }\n  }\n\n  results.push({\n    json: {\n      text,\n      created_at,\n      url_text,\n      metadata: { title, description, imageUrl }\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        240
+      ],
+      "id": "6676abc8-52e9-4636-8999-9d1281fdaa02",
+      "name": "urlmeta_transf"
+    },
+    {
+      "parameters": {
+        "url": "= https://caps.gettr.com/{{ $json.url_text }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "origin",
+              "value": "https://gettr.com"
+            },
+            {
+              "name": "referer",
+              "value": "https://gettr.com/"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        1264
+      ],
+      "id": "bfdb0ea7-afc9-45ac-aa20-a9835523be98",
+      "name": "Get Metadata - HTTP Request",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code assumes 'items' is NOT globally available in your version of n8n\n// Instead, use the correct way to access input items in n8n Code node\n// which is via $input.all() or $input.item if working on a single item\n\n// Get all input items\nconst inputItems = $input.all();\n\nreturn inputItems.map(item => {\n  return {\n    json: {\n      \"text\": item.json?.text,\n      \"created_at\": item.json?.created_at,\n      \"url_text\": item.json?.url_text,\n      metadata: {        \n        title: null,\n        description: null,\n        imageUrl: null,\n      }\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        592
+      ],
+      "id": "829ce44f-6f24-43fe-9cb1-c92965b8a723",
+      "name": "Transf_default"
+    },
+    {
+      "parameters": {
+        "jsCode": "// FIXED: The function to extract the YouTube video ID has been made more robust\n// to handle various URL formats (watch, youtu.be, embed, shorts).\n// MODIFIED: Added support for YouTube Live URLs (e.g., /live/VIDEO_ID).\n\n/**\n * Extracts the YouTube video ID from various URL formats.\n * @param {string} url - The URL to parse.\n * @returns {string|null} The YouTube video ID, or null if not found.\n */\nfunction extractYouTubeId(url) {\n  // Return null if the URL is not a valid string.\n  if (!url || typeof url !== 'string') {\n    return null;\n  }\n\n  // An array of regular expressions to match different YouTube URL formats.\n  // The video ID is captured in the first group.\n  const regexPatterns = [\n    // Standard link: https://www.youtube.com/watch?v=VIDEO_ID\n    /[?&]v=([^&?#]+)/,\n    // Short link: https://youtu.be/VIDEO_ID\n    /youtu\\.be\\/([^?#]+)/,\n    // Embed link: https://www.youtube.com/embed/VIDEO_ID\n    /\\/embed\\/([^?#]+)/,\n    // Shorts link: https://www.youtube.com/shorts/VIDEO_ID\n    /\\/shorts\\/([^?#]+)/,\n    // Live link: https://www.youtube.com/live/VIDEO_ID\n    /\\/live\\/([^?#]+)/\n  ];\n\n  // Iterate through the patterns and return the first match found.\n  for (const regex of regexPatterns) {\n    const match = url.match(regex);\n    if (match && match[1]) {\n      // The video ID is in the first capturing group.\n      return match[1];\n    }\n  }\n\n  // If no patterns match, return null.\n  return null;\n}\n\n\n// Loop over input items and add a new field called 'youtube_vid' to the JSON of each one.\nfor (const item of $input.all()) {\n  const urlToParse = item.json.url_text;\n  item.json.youtube_vid = extractYouTubeId(urlToParse);\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        -176
+      ],
+      "id": "5c0b3329-eff7-41da-b834-33ff916e864c",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6acd44cc-3c45-4bf0-9e48-236f0d15e3a5",
+              "leftValue": "={{ $json.metadata.imageUrl || \"\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "ddf1555a-7698-4bb8-9228-e3bce47a660a",
+              "leftValue": "={{ $json.url_text }}",
+              "rightValue": "truthsocial.com/",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1472,
+        1248
+      ],
+      "id": "a146cce7-c060-41ab-a41c-a24b769916db",
+      "name": "Failed",
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.urlmeta.org/meta",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('Switch').item.json.url_text }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1728,
+        912
+      ],
+      "id": "5d82200f-0870-4291-9dc4-94713c3295dd",
+      "name": "UrlMetadata_2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6206vLnDeBapFSAw",
+          "name": "URLMeta_key_Gettr_content"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const REMOVE_RE = /\\s*\\(formerly\\s+twitter\\)\\s*/i;\n\nconst clean = s => (s || '').replace(REMOVE_RE, '').trim() || null;\n\nconst results = [];\n\nconst isImageUrl = (url) => {\n  if (!url || typeof url !== 'string') {\n    return false;\n  }\n  return /\\.(jpg|jpeg|png|gif|bmp|webp|svg)(?:\\?.*)?$/i.test(url);\n};\n\nfor (const item of $input.all()) {\n  const json = item.json ?? {};\n  let title = null, description = null, imageUrl = null;\n  let text = null, created_at = null, url_text = null;\n\n  // Check if this is a \"data\" type structure (alternate format)\n  if (json.data && typeof json.data === 'object') {\n    const data = json.data;\n    title = clean(data.title);\n    description = clean(data.description);\n    imageUrl = data.image || data.logo || null;\n    text = data.headline || data.title || null;\n    created_at = json.timestamp || data.date || null;\n    url_text = data.url || json.meta?.url || null;\n  } else {\n    // Original structure\n    const meta = json.meta ?? {};\n    const site = meta.site ?? {};\n    text = json.text;\n    url_text = json.url_text;\n    created_at = json.created_at;\n\n    if (isImageUrl(url_text)) {\n      title = null;\n      description = null;\n      imageUrl = null;\n    } else {\n      title = clean(meta.title);\n      const siteName = clean(site.name);\n      const canonical = site.canonical ?? '';\n      imageUrl = meta.image ?? null;\n\n      if (siteName && canonical)      description = `${siteName} - ${canonical}`;\n      else if (siteName)              description = siteName;\n      else if (canonical)             description = canonical;\n\n      description = clean(description);\n    }\n  }\n\n  results.push({\n    json: {\n      text,\n      created_at,\n      url_text,\n      metadata: { title, description, imageUrl }\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        640
+      ],
+      "id": "53fcbf1c-892c-4b1a-87d8-f10883ea174b",
+      "name": "urlmeta_transf2"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1152,
+        1248
+      ],
+      "id": "312a0cb1-c6de-47a6-9721-7ecf642c47cf",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2400,
+        752
+      ],
+      "id": "17d6a879-125d-42db-ab1f-3e679229efcd",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1488,
+        240
+      ],
+      "id": "9ad86ed8-dd86-43b7-b590-e043493f8b7b",
+      "name": "Merge4"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1488,
+        -64
+      ],
+      "id": "c47f622f-218f-4025-bbd0-999b23aec280",
+      "name": "Merge5"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('start').item.json.page_url }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    },
+                    "id": "e5da4ed3-ef42-4231-94d2-baf6dbb5d66f"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PAGE_REVIEW"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "OTHERS"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1536,
+        448
+      ],
+      "id": "9080cfcf-72b4-48cf-978d-07da1a593e56",
+      "name": "preview_switch"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "80b08da9-7c5c-4ecb-8bc9-663e134acccf",
+              "name": "url_text",
+              "value": "={{ $('start').item.json.page_url }}",
+              "type": "string"
+            },
+            {
+              "id": "1b4b7c0c-6109-44d2-a7cf-d3c36ae10c3e",
+              "name": "url_text_type",
+              "value": "page",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1136,
+        320
+      ],
+      "id": "08e07fdd-e5af-495b-bf22-13e63af6f371",
+      "name": "rename_url"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "cfg_domains_wo_preview",
+        "key": "newsroom:cfg:domains_w/o_preview",
+        "keyType": "sets",
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -2016,
+        640
+      ],
+      "id": "243d5518-bd81-45b4-9ce8-e2f4d9c207e5",
+      "name": "Redis",
+      "credentials": {
+        "redis": {
+          "id": "7KNoWHz8WpypqT8l",
+          "name": "Redis-Upstash Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "196166a6-3c93-4b3a-8418-963807983ff4",
+              "leftValue": "={{ $json.has_preview }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -560,
+        448
+      ],
+      "id": "94f7a296-a9d7-4c2d-b19c-e0d94474cd86",
+      "name": "If has preview"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n-svr.gettr.fyi:7771/api/v1/url/final",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "9277311724445fa26f0172a701150da4743bf4b8b0257cf33a39a4c6445204a4"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.url_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -176,
+        80
+      ],
+      "id": "3125aa71-127d-438f-89c3-ebf42d3544b7",
+      "name": "get final url",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if URL should have preview based on configured domains\nfunction has_preview(url) {\n  // Handle null/undefined/empty url  \n  if (!url || typeof url !== 'string') return false;\n  \n  // Get the domains array from config\n  const config = $('Redis').first();\n  if (!config) return true; // Default to true if no config found\n  \n  const domains = config.json.cfg_domains_wo_preview;\n  if (!domains || !Array.isArray(domains)) {\n    return true; // Default to true if domains not configured properly\n  }\n  \n  // Convert URL to lowercase once for performance\n  const lowerUrl = url.toLowerCase();\n  \n  // Check if url contains any of the domains (no preview domains)\n  for (const domain of domains) {\n    if (domain && lowerUrl.includes(domain.toLowerCase())) {\n      return false; // URL contains a no-preview domain\n    }\n  }\n  \n  return true; // URL doesn't contain any no-preview domains, so it has preview\n}\n\n// Process all items and add has_preview field\nconst items = $input.all();\nfor (const item of items) {\n  if (item && item.json) {    \n    item.json.has_preview = has_preview(item.json.url_text);\n  }\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        448
+      ],
+      "id": "13d0e0ee-8789-4842-98c1-fda19a28b201",
+      "name": "filter_blacklist"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        144,
+        128
+      ],
+      "id": "97dd7854-d9a1-4277-87f9-dc9d527f9737",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1726489b-48c6-4893-92b8-2d398a32716a",
+              "name": "url_text",
+              "value": "={{ $json.final_url || $json.url_text }}",
+              "type": "string"
+            },
+            {
+              "id": "d7d2c8a8-8d12-4d4e-a7ad-82c27e22ad45",
+              "name": "url_text_type",
+              "value": "={{ $json.url_text_type }}",
+              "type": "string"
+            },
+            {
+              "id": "e01114ab-7fdc-49c4-b0f3-fbec768783c0",
+              "name": "has_preview",
+              "value": "={{ $json.has_preview }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        320,
+        128
+      ],
+      "id": "651d3db8-f0de-4b0e-a16f-cad0e184de36",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "content": "## 1. 黑名单domain(比如南华早报)从redis读取\n## 2. 新增API获取 news.google.com的最终定向页面，方便获取正确的preview",
+        "height": 200,
+        "width": 580
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        -320
+      ],
+      "id": "76b54ba0-8e65-4eea-b44b-58de78d0e00d",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0b341e4d-9937-4be9-be44-9fadfe304d33",
+              "leftValue": "={{ $json.url_text.toLowerCase() }}",
+              "rightValue": "youtube.com/",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "32e3e806-b478-47f6-b70f-bfa24f50ad67",
+              "leftValue": "={{ $json.url_text.toLowerCase() }}",
+              "rightValue": "youtu.be/",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -336,
+        -16
+      ],
+      "id": "372e0ba7-6c68-4cf5-93f7-355a13c60334",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bf491ae8-5e10-4378-87de-2a581586c49f",
+              "leftValue": "={{ $json.meta.image }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1872,
+        784
+      ],
+      "id": "da3b8b9a-2da5-4c2e-99e3-484b5a8d8da6",
+      "name": "urlmeta_failed"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n-svr.gettr.fyi:7771/api/v1/website/metadata",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "9277311724445fa26f0172a701150da4743bf4b8b0257cf33a39a4c6445204a4"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('Failed').item.json.url_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2064,
+        640
+      ],
+      "id": "2586880b-b084-4fa7-b902-5b753bb10c18",
+      "name": "call self-hosted api",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dfa44345-9125-45ba-88d3-3990c0086d32",
+              "name": "metadata",
+              "value": "={{\n{\n  title:$json.title,\n  description: $json.description,\n  imageUrl: $json.image\n}\n\n}}",
+              "type": "object"
+            },
+            {
+              "id": "e213a2b4-8e5f-48fd-a345-66dccad43ce3",
+              "name": "url_text",
+              "value": "={{ $('Failed').item.json.url_text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2400,
+        592
+      ],
+      "id": "549e1a3d-3f9b-45bc-9c5d-66909d8b6457",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text"
+            },
+            {
+              "name": "page_url"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2208,
+        448
+      ],
+      "id": "deba0b33-42be-4573-981b-4e3c71dc4da0",
+      "name": "start"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1840,
+        448
+      ],
+      "id": "a693a320-dbfd-458e-a43a-0fed6c33ab9a",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://siterelic.com/siterelic-api/metascraping",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.url_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        480
+      ],
+      "id": "08e6d4c3-36f6-4a12-8b98-f8076a67b47f",
+      "name": "UrlMetadata1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6206vLnDeBapFSAw",
+          "name": "URLMeta_key_Gettr_content"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://siterelic.com/siterelic-api/metascraping",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('Switch').item.json.url_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1456,
+        944
+      ],
+      "id": "407d8c69-8452-47ef-86e0-feb7e8868690",
+      "name": "UrlMetadata2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6206vLnDeBapFSAw",
+          "name": "URLMeta_key_Gettr_content"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {
+    "start": [
+      {
+        "json": {
+          "text": "Donald J. Trump Truth Social Jul 28, 2025, 10:34 AM\n\nhttps://www.scmp.com/week-asia/lifestyle-culture/article/3318329/south-korea-theft-exam-papers-puts-focus-high-pressure-education-system?utm_source=rss_feed",
+          "page_url": "https://www.reuters.com/world/asia-pacific/nvidias-huang-speak-washington-investors-look-hints-china-2025-10-28"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Extract URL": {
+      "main": [
+        [
+          {
+            "node": "filter_blacklist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Page Metadata": {
+      "main": [
+        [
+          {
+            "node": "Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UrlMetadata": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "UrlMetadata",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "UrlMetadata1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transf_default",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Metadata - HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YoutubeAPI": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "data_transf_for_youtube_api": {
+      "main": [
+        [
+          {
+            "node": "Merge_Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "urlmeta_transf": {
+      "main": [
+        [
+          {
+            "node": "Merge_Metadata",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Metadata - HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Transf_default": {
+      "main": [
+        [
+          {
+            "node": "Merge_Metadata",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "YoutubeAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed": {
+      "main": [
+        [
+          {
+            "node": "UrlMetadata_2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "UrlMetadata2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge_Metadata",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "UrlMetadata_2": {
+      "main": [
+        [
+          {
+            "node": "urlmeta_failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "urlmeta_transf2": {
+      "main": [
+        [
+          {
+            "node": "Merge_Metadata",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Extract Page Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "urlmeta_transf2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "urlmeta_transf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge5": {
+      "main": [
+        [
+          {
+            "node": "data_transf_for_youtube_api",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preview_switch": {
+      "main": [
+        [
+          {
+            "node": "rename_url",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rename_url": {
+      "main": [
+        [
+          {
+            "node": "filter_blacklist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If has preview": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get final url": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter_blacklist": {
+      "main": [
+        [
+          {
+            "node": "If has preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "get final url",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "urlmeta_failed": {
+      "main": [
+        [
+          {
+            "node": "call self-hosted api",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "call self-hosted api": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Merge_Metadata",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "start": {
+      "main": [
+        [
+          {
+            "node": "Redis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "preview_switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UrlMetadata1": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "UrlMetadata2": {
+      "main": [
+        [
+          {
+            "node": "urlmeta_failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "any"
+  },
+  "versionId": "ca738dd1-10aa-4d64-bea6-ca68117f8160",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "Ttkv6qBU1f6Y3rR9",
+  "tags": [
+    {
+      "updatedAt": "2025-07-05T03:21:24.203Z",
+      "createdAt": "2025-07-05T03:21:24.203Z",
+      "id": "KPWthcboPhh3rAk4",
+      "name": "PRODUCTION"
+    }
+  ]
+}

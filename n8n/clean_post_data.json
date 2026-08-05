@@ -1,0 +1,107 @@
+{
+  "name": "clean_post_data",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "post_content"
+            },
+            {
+              "name": "created_at",
+              "type": "any"
+            },
+            {
+              "name": "prev_img"
+            },
+            {
+              "name": "prev_ttl"
+            },
+            {
+              "name": "prev_desc"
+            },
+            {
+              "name": "prev_src_link"
+            },
+            {
+              "name": "user_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "47ecc7f4-a51e-4df1-a0e1-4a572a316618",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fix string cleaning function to preserve normal symbols, emojis, line breaks, spaces\nfunction replace_me(s) {\n  return typeof s === \"string\"\n    ? s.replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, '')\n    : s;\n}\n\n// Process all input items and clean specified fields\nfor (const item of $input.all()) {\n  item.json.post_content = replace_me(item.json.post_content);\n  item.json.prev_ttl = replace_me(item.json.prev_ttl);\n  item.json.prev_desc = replace_me(item.json.prev_desc);\n}\n\nreturn $input.all(); "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "ce5bbfa0-1aa1-428c-a859-47d834275eee",
+      "name": "Code"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "post_content": "🚨Pepper-Sprayed, Beaten for No Helmet — Dies step\nIn Huayang County, \"Hunan Province\", a villager named Xiao Chuncai was chased home by two traffic officers for riding a bike without a helmet. Upon reaching his doorstep, officers allegedly pepper-sprayed and beat him with batons—he died on the spot.\n\nEnraged villagers surrounded the officers. That night, a large contingent of police forcibly removed the two from the village.\n\n💥 No trial. No justice. Just terror in uniform.\n\n#CommunistChina \n#HumanRights",
+          "created_at": null,
+          "prev_img": null,
+          "prev_ttl": null,
+          "prev_desc": null,
+          "prev_src_link": null,
+          "user_id": null
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "any"
+  },
+  "versionId": "3b2eece8-0e98-4f04-b969-0392a279b82e",
+  "meta": {
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "LNjgrsietmT9SDea",
+  "tags": [
+    {
+      "updatedAt": "2025-07-05T03:21:24.203Z",
+      "createdAt": "2025-07-05T03:21:24.203Z",
+      "id": "KPWthcboPhh3rAk4",
+      "name": "PRODUCTION"
+    }
+  ]
+}

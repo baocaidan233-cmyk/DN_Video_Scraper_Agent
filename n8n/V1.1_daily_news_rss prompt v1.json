@@ -1,0 +1,1701 @@
+{
+  "name": "V1.1_daily_news_rss prompt v1",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const timestamp = new Date($input.first().json.timestamp);\n\n// Extract the minute of the timestamp\nconst minute = timestamp.getMinutes();\n\n// Calculate the trigger number (6 triggers per hour)\nconst triggerNumber = Math.floor(minute / 10) + 1; // Add 1 to start counting from 1 instead of 0\n\nreturn {\n  triggerNumber,\n  timestamp: $input.first().json.timestamp,\n  readableDate:$input.first().json[\"Readable date\"] ,\n  readableTime: $input.first().json[\"Readable time\"],\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8896,
+        640
+      ],
+      "id": "34bb68f9-2a31-4d86-8690-fccfbc3ca36a",
+      "name": "get trigger cycle"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6e5e2b06-8778-4f2c-8c8e-cc0d7d462b57",
+              "name": "max_feed_items",
+              "value": 10000,
+              "type": "number"
+            },
+            {
+              "id": "57734838-2fcc-4f5c-82de-aefeb1aade07",
+              "name": "filter_feed_hours",
+              "value": 3,
+              "type": "number"
+            },
+            {
+              "id": "65446dbb-d4f2-426b-af1a-d722d5cdf1ee",
+              "name": "max_feed_per_rss",
+              "value": 150,
+              "type": "number"
+            },
+            {
+              "id": "6d5809d7-c28e-456b-a157-904d2c5f0592",
+              "name": "redis_key_url_hash",
+              "value": "newsrooms:dailynews_v1:title_hash:",
+              "type": "string"
+            },
+            {
+              "id": "6509d37b-fc30-4961-8ce1-d79bc679a67a",
+              "name": "rss_limit",
+              "value": 200,
+              "type": "number"
+            },
+            {
+              "id": "b94ac598-f125-46bb-8cd6-aa71908d4381",
+              "name": "filter_score_threshold",
+              "value": 4.5,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -8624,
+        592
+      ],
+      "id": "4911fb77-f9f8-4ee5-85db-71c1d0965730",
+      "name": "global_config"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2ea16dc9-9f32-81bf-979e-e8e62a48ca20",
+          "mode": "list",
+          "cachedResultName": "rss_daily_news",
+          "cachedResultUrl": "https://www.notion.so/2ea16dc99f3281bf979ee8e62a48ca20"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "in_use|checkbox",
+              "condition": "equals",
+              "checkboxValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -8400,
+        480
+      ],
+      "id": "cdfd8438-8de3-4578-a677-38d1ba7f1ad0",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "0WAY1Scs0FTx0cM0",
+          "name": "rss_daily_news"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const siteCookies = [];\nconst inputItems = $input.all();\nfor (const item of inputItems) {\n  const { property_cookie, property_website } = item.json;\n\n  if (property_website?.length > 3 && property_cookie?.length > 3) {\n    siteCookies.push({\n      site: property_website.trim(),\n      cookie: property_cookie,\n    });\n  }\n}\n\nreturn siteCookies.map((data) => ({ json:data }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7952,
+        480
+      ],
+      "id": "a9da6924-b960-47f9-a102-83b5709085ca",
+      "name": "domain_cookie_mapping",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $(\"waqar split\")\n  .all()\n  .map((item) => item.json);\nreturn items;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7728,
+        480
+      ],
+      "id": "b9a6c963-d206-4c90-9621-9f1012017322",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "j5kxcqc9t905RP-D_26Ch",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/j5kxcqc9t905RP-D_26Ch",
+          "cachedResultName": "newsroom — resss_copy_v2"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "rss_read_batchsize": 34,
+            "filter_feed_hours": "={{ $('global_config').first().json.filter_feed_hours }}",
+            "max_feed_items": "={{ $('global_config').first().json.max_feed_items }}",
+            "rss_notion_source": "={{ $('Code').all() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "rss_read_batchsize",
+              "displayName": "rss_read_batchsize",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "filter_feed_hours",
+              "displayName": "filter_feed_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "max_feed_items",
+              "displayName": "max_feed_items",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "rss_notion_source",
+              "displayName": "rss_notion_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -7520,
+        480
+      ],
+      "id": "fa9bf9c9-eeb3-492e-b6af-cb129113277b",
+      "name": "read rss items",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const totalItems = $input.all().length;\nconst totalTriggers = 12 / 2;\nconst itemsPerCycle = Math.ceil(totalItems / totalTriggers); // Adjust the division to round up\nconst items = $input.all().map((item) => item.json);\n\nconst sortedItems = items.sort((a, b) => {\n  const nameA = a.name.toLowerCase();\n  const nameB = b.name.toLowerCase();\n  return nameA.localeCompare(nameB);\n});\n\n// Determine the cycle number (this would usually come from an external input, but let's assume it's part of the logic)\nconst cycle =$('get trigger cycle').first().json.triggerNumber > 6 ? $('get trigger cycle').first().json.triggerNumber - 6 : $('get trigger cycle').first().json.triggerNumber;\n\n// Calculate the start and end indices for the slice\nconst start = (cycle - 1)*itemsPerCycle;\nconst end = start+itemsPerCycle;\n\nconsole.log(start, end);\n\n// Get the items for the current cycle\nconst cycleItems = sortedItems.slice(start, end);\nconsole.log(cycleItems.map(cycle=>cycle.name))\n\n// Return only the items for the current cycle\nreturn cycleItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8176,
+        480
+      ],
+      "id": "d2471ca8-d37f-4891-aa43-9f3521f80d1b",
+      "name": "waqar split"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -6432,
+        496
+      ],
+      "id": "ac5c7b5f-f236-4aac-87a7-affc258d70ba",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -5808,
+        448
+      ],
+      "id": "d75fae5f-bc24-449a-aa68-2d32e9df2c6b",
+      "name": "Merge_input_with_Redis"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "check_get_url",
+        "key": "={{  $('global_config').first().json.redis_key_url_hash + $json.url_hash }}",
+        "keyType": "string",
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -6144,
+        592
+      ],
+      "id": "dd51e216-a4c4-46c2-ba4b-353a45c64171",
+      "name": "article_link_check_Redis",
+      "alwaysOutputData": false,
+      "credentials": {
+        "redis": {
+          "id": "7KNoWHz8WpypqT8l",
+          "name": "Redis-Upstash Key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.check_get_url }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Not Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -5488,
+        496
+      ],
+      "id": "44871b9b-2324-47ec-9e9e-2584cba263c0",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"llm_score\": {\n      \"type\": \"number\",\n      \"minimum\": 0,\n      \"maximum\": 10,\n      \"description\": \"Score from 0 (not a fit) to 10 (perfect fit for a top headline)\"\n    },\n    \"llm_comment\": {\n      \"type\": \"string\",\n      \"description\": \"Reasoning behind the score, explaining topic relevance and source authority\"\n    }\n  },\n  \"required\": [\"llm_score\", \"llm_comment\"]\n}\n",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -5056,
+        816
+      ],
+      "id": "87ffb994-f9e2-4a8b-9d90-dc95892f9862",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite-preview-09-2025",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -4976,
+        1008
+      ],
+      "id": "e61b3c00-2117-4446-99da-9fee581adec0",
+      "name": "Google Gemini Chat Model4",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "uGdZeWzL6ORB7NVk",
+          "name": "adam_test_Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Title: {{ $json.title }} \n\nDescription: {{ $json.description }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "## Role & Perspective\n\nYou are a **senior geopolitical editor** for a social media news channel focused on **U.S.–China strategic competition** and **exposing CCP overseas expansion, influence operations, and technology acquisition**.\n\nYou analyze stories through:\n\n- International power dynamics\n- Alliance structures\n- Institutional capture\n- Technology and supply-chain leverage\n\nYou must:\n\n- Treat the **CCP as a party-state apparatus**, not as equivalent to China or the Chinese people\n- Avoid neutral or symmetrical framing that obscures power asymmetry\n- Avoid over-scoring symbolic diplomacy, rhetoric, or routine exchanges\n\n## Your Task\n\nGiven a news **headline** and **description** (if available), assign a score from **0 to 10** indicating how headline-worthy the story is for a **U.S.–China strategic competition / CCP-exposure news feed**.\n\nYou must weigh both:\n\n- **Direct CCP / China global actions**, and\n- **Indirect global developments** that meaningfully affect the Chinese Communist Party’s power, legitimacy, leverage, or strategic standing relative to the United States and its allies.\n\nYour evaluation must be based on **geopolitical and structural impact**, not moral outrage, click potential, or routine news value.\n\n## Core Scoring Criteria (Apply Every Time)\n\nWhen assigning a score, explicitly evaluate the story against **all** of the following:\n\n### 1. CCP Linkage\n\nDoes the story involve or materially affect:\n\n- CCP / party-state agencies, PLA, state-owned enterprises\n- Proxy actors, front organizations, United Front-style channels\n- Economic, regulatory, or technological leverage used for political or security ends\n\nStories with **no credible CCP linkage** should not score above **4.9**.\n\n---\n\n### 2. Mechanism Visibility\n\nHigher scores require visibility into **how CCP power operates**, not just *what happened*.\n\nScore higher when the story reveals:\n\n- Institutional pathways\n- Technology transfer or dependency creation\n- Financial, regulatory, or supply-chain leverage\n- Hidden coordination, proxies, or cut-outs\n\nStories that only label an issue without explaining the mechanism should score lower.\n\n---\n\n### 3. Strategic Impact\n\nAssess **long-term geopolitical consequence**, not media attention.\n\nAsk:\n\n- Does this shift regional or global power balances?\n- Does it affect U.S. alliances or deterrence?\n- Does it change control over technology, infrastructure, standards, or institutions?\n- Does it create long-term dependency or leverage?\n\n---\n\n### 4. Information Value\n\nScore higher for:\n\n- New exposure or investigation\n- Escalation or inflection points\n- Actions difficult to reverse\n\nScore lower for:\n\n- Routine updates\n- Recycled narratives\n- Pure commentary without new facts\n\n---\n\n## Output Format\n\n{\n\"llm_score\": float,\n\"llm_comment\":\"A concise justification referencing CCP linkage, mechanism, and/or strategic impact.\"\n}\n\nThe comment must be **analytical and specific**, not emotional or rhetorical.\n\n---\n\n## Special Rules (Strictly Enforced)\n\n### Theater-Critical Shifts\n\nIf a development in **another country** significantly shifts balance in a theater critical to China\n\n(e.g. U.S.–Philippines defense pact, Japan military normalization, Russia military collapse, EU tech alignment):\n\n→ **Minimum score: 6**, even without direct mention of China.\n\n---\n\n### Top CCP Leaders\n\nIf a current or former **top CCP leader** (e.g. Xi Jinping, Politburo Standing Committee members) is mentioned in connection with:\n\n- troop movements\n- elite purges or instability\n- major diplomacy\n- sanctions or countermeasures\n\n→ **Minimum score: 7**\n\n---\n\n### Missing Descriptions\n\nIf **no description** is provided:\n\n- Infer conservatively from the headline\n- Bias **slightly upward** if the headline implies security, technology, institutional control, or geopolitical alignment\n- Do **not** exceed **7** unless the headline clearly signals a strategic inflection point\n\n---\n\n### Tech War Updates (Hard Cap Logic)\n\nTechnology competition (chips, AI, critical minerals, telecom, biotech) is central to U.S.–China competition, but:\n\n- Incremental or transactional updates\n    \n    (corporate sales, licenses, fee-based permissions, narrow supplier deals)\n    \n    → **Must not score above 7**\n    \n- Scores **8–9** are reserved only for:\n    - major export-control regime changes\n    - treaty-level or alliance-wide tech coordination\n    - sweeping sanctions or bans\n    - actions that materially alter China’s long-term technological trajectory\n\n---\n\n### Big-3 Leader Health Updates\n\nAny credible, significant update regarding the health of:\n\n- **Xi Jinping**\n- **Vladimir Putin**\n- **Donald Trump**\n\nwhen tied to governance, leadership stability, or strategic decision-making\n\n→ **Score no lower than 7**\n\n---\n\n## Scoring Bands (Implicit Reference)\n\n- **0–4.9** → Not relevant; generic China mention; no CCP mechanism or strategic impact\n- **5.0–5.9** → Peripheral context or early signal\n- **6.0–6.9** → Clear relevance to CCP power or U.S.–China competition\n- **7.0–7.7** → Strong geopolitical or technological significance\n- **7.8–8.4** → High-impact; reveals mechanisms or shifts strategic balance\n- **8.5–10** → Rare, multi-trigger, long-term strategic inflection points\n\n---\n\n## Consistency & Safety Rules\n\n- When uncertain, **score conservatively** and explain what strategic mechanism or impact is missing\n- Do **not** infer CCP intent solely from nationality, ethnicity, or vague references\n- Prioritize **structure over sentiment**, **mechanism over rhetoric**, **long-term impact over short-term noise**"
+            }
+          ]
+        },
+        "batching": {
+          "batchSize": 3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -5072,
+        624
+      ],
+      "id": "65c3b0bd-2dc9-4c65-b0e5-2e3089a2d366",
+      "name": "Scoring",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{  $('global_config').first().json.redis_key_url_hash +$('Not Exists?').item.json.url_hash  }}",
+        "value": "=scored,{{$json.output?.llm_score}},{{ new Date().toISOString() }}",
+        "keyType": "string",
+        "expire": true,
+        "ttl": 604800
+      },
+      "name": "Mark article link In Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -4704,
+        592
+      ],
+      "id": "803bbcaf-7449-4198-9d27-a48cb163db13",
+      "credentials": {
+        "redis": {
+          "id": "7KNoWHz8WpypqT8l",
+          "name": "Redis-Upstash Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -5184,
+        816
+      ],
+      "id": "788c4f7f-8a7b-4b91-81c4-83de6a94c650",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "pGG6EOcx9qAO37kY",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -4480,
+        480
+      ],
+      "id": "684187c9-c70c-4110-924e-f47858575399",
+      "name": "Merge4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "346c8500-8b65-424a-ba60-430a1ac1dd83",
+              "leftValue": "={{ $json?.output?.llm_score }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -4304,
+        304
+      ],
+      "id": "f84ec7de-f813-4dbe-b800-007b7087ba28",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "45d6e375-923c-4036-b3ae-3777a45f096b",
+              "leftValue": "={{ $json?.output?.llm_score }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -4176,
+        448
+      ],
+      "id": "05c6b799-c9cc-4edd-856a-9cc52574179b",
+      "name": "filter score"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -3232,
+        592
+      ],
+      "id": "ccbf651b-c9fe-4241-a979-a3db2798961a",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n-svr.gettr.fyi:7771/api/v1/article/extract-premium",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "9277311724445fa26f0172a701150da4743bf4b8b0257cf33a39a4c6445204a4"
+            },
+            {
+              "name": "cookie",
+              "value": "={{ $json?.cookie || null }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3472,
+        720
+      ],
+      "id": "213ddf0a-b6bb-4c15-aad0-8a00038e97c5",
+      "name": "scape article",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get site-cookie mapping list from referenced node\nconst siteCookieMap = $(\"domain_cookie_mapping\").all().map(item => item.json);\n\n// Helper: Get cookie by matching link with site\nfunction get_cookie_from_link(link) {\n  if (!link) return null;\n\n  for (const mapping of siteCookieMap) {\n    const { site, cookie } = mapping;\n    if (site && link.toLowerCase().includes(site.toLowerCase())) {\n      return cookie;\n    }\n  }\n  return null;\n}\n\n// Process each input item\nconst output = $input.all().map(item => {\n  const url = item.json.url;\n  item.json.cookie = get_cookie_from_link(url);\n  return item;\n});\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3696,
+        688
+      ],
+      "id": "4d68068e-6d25-4ccf-8307-db2c825722ff",
+      "name": "attach cookie"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one$input.first().json.data\nfor (const item of $input.all()) {\n  delete item.json.data;\n  item.json.article = item.json.extracted_text || item.json.description;\n  delete item.json.extracted_text ;\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2608,
+        464
+      ],
+      "id": "37226caf-000c-498e-91c7-702fcd9b073c",
+      "name": "clean data"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Title:  {{ $json.title }}\n\nArticle: {{$json.article }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=## CONTENT GENERATION PROMPT\n\n### ROLE & POSITIONING\n\nYou are a **senior editor** for a social media news channel focused on **U.S.–China strategic competition** and **exposing the Chinese Communist Party’s global influence, infiltration, and technology expansion**.\n\nYou write with:\n\n- Zero pro-CCP framing\n- No normalization or “both-sides” treatment of CCP behavior\n- Clear separation between the **CCP**, **China**, and **the Chinese people**\n\nYour writing style is:\n\n- Hard, factual, and precise\n- Mechanism-driven, not emotional\n- Suitable for high-impact social media news distribution\n\n---\n\n## TASK\n\nRead the article below **in full**, assess its relevance to the channel, and write **two hard-hitting paragraphs** suitable for social media.\n\nThe post must report **what happened**, focusing on **actors, actions, and consequences**, without commentary or speculation.\n\n---\n\n## INPUT\n\n**Title:** \n\"{{ $json.title }}\"\n\n**Article:**\n\"{{$json.article}}\"\n\n---\n\n## OUTPUT FORMAT (STRICT)\n\nReturn a **single string of English text only**.\n\nFormatting rules (must all be followed):\n\n- **Two paragraphs only**\n- **One blank line between paragraphs**\n- Total length around **60 words**\n- If the article is **highly relevant to CCP global influence / U.S.–China competition**, up to **95 words maximum**\n- **English only** — never include Chinese\n- No headlines, no metadata, no summaries, no labels\n\n---\n\n## WRITING RULES (MANDATORY)\n\nYour output must:\n\n- Use **clear, non-speculative language**\n- Use **active voice + strong verbs**\n    \n    (e.g., exposes, escalates, blocks, deploys, targets, bans, dismantles, sanctions)\n    \n- **Always start each paragraph with the main actor or institution** named in the article\n    \n    (person, organization, government body)\n    \n- Use **“BREAKING:”** at the start **only if** the article describes a fresh, disruptive, or urgent event\n- Report facts only — **do not add analysis, interpretation, or predictions**\n- Do **not** end with a wrap-up sentence or editorial takeaway\n\n---\n\n## NAMING & ATTRIBUTION RULES (CRITICAL)\n\n- Use **only names and titles explicitly given in the article**\n- Do **not** correct, upgrade, downgrade, or infer titles\n- Do **not** invent roles or use vague labels like “the government”\n\nSpecific enforced rules:\n\n- **Donald J. Trump → always render as “President Trump”**\n- **CCP leader Xi Jinping**, **Wang Qishan**, **Han Zheng** — use exactly as written if present\n- If **no official title is provided**, use **full name only**\n- Do **not** use time-based titles (former, ex, etc.) unless the article explicitly includes them\n- Do **not** rely on model memory for titles\n\nAttribution:\n\n- Trailing attribution is **not allowed**\n- Attribution inside a sentence is allowed **only if it appears naturally in the article**\n\n---\n\n## TITLE VS CONTENT PRIORITY\n\n- Always prioritize the **Article content**\n- Use the **Title only as secondary framing**\n- If Title and Article conflict, **trust the Article**\n\n---\n\n## WHAT YOU MUST NOT DO\n\n- Do not use rhetorical questions\n- Do not use hashtags or exclamation marks\n- Do not add dates, background context, or historical explanation\n- Do not speculate on motives or future outcomes\n- Do not say “this shows,” “this suggests,” or “according to a report”\n- Do not mention AI, platforms, or the feed itself\n- Do not include Chinese text under any circumstance"
+            }
+          ]
+        },
+        "batching": {
+          "batchSize": 3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -2144,
+        560
+      ],
+      "id": "e51c388d-d07e-48c9-83a1-7d88b9490aa6",
+      "name": "Gen Gettr Post"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "583b301d-12f2-40a2-86e9-6e621570d9ee",
+              "name": "post_content",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1840,
+        560
+      ],
+      "id": "46203209-0642-4efa-b047-caa47bbf0a67",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1632,
+        464
+      ],
+      "id": "f8d8e04b-f514-4d3b-8c52-3c2e4e3f79b2",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "maxTokens": 200,
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2192,
+        800
+      ],
+      "id": "3ddda079-9f75-49ef-b81f-56921d68a0a7",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "xCCAYjPcpsG7SZpm",
+          "name": "tweets_OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{  $('global_config').first().json.redis_key_url_hash +$json.url_hash  }}",
+        "value": "=done,{{ new Date().toISOString() }}",
+        "keyType": "string",
+        "expire": true,
+        "ttl": 604800
+      },
+      "name": "Mark article link In Redis1",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1168,
+        464
+      ],
+      "id": "b9f44848-54ca-4a0c-afc4-843beada693c",
+      "credentials": {
+        "redis": {
+          "id": "7KNoWHz8WpypqT8l",
+          "name": "Redis-Upstash Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- configuration ---\nconst MAX_WORDS = 57;\nconst MIN_ASCII_RATIO = 0.75;\nconst MIN_ENGLISH_WORD_RATIO = 0.25;\nconst SHORT_TEXT_WORDS = 12;\n\n// --- English connectors ---\nconst englishCore = new Set([\n  \"the\",\"of\",\"and\",\"to\",\"in\",\"a\",\"for\",\"is\",\"on\",\"with\",\"at\",\"by\",\"from\",\n  \"that\",\"this\",\"an\",\"be\",\"it\",\"as\",\"was\",\"are\",\"have\",\"has\",\"will\",\"not\",\n  \"new\",\"after\",\"over\",\"under\",\"against\",\"president\",\"minister\",\"meeting\",\n  \"war\",\"election\",\"russia\",\"china\",\"ukraine\",\"nato\",\"united\",\"states\",\n  \"europe\",\"military\",\"government\",\"prime\",\"official\",\"reports\",\"world\",\n  \"foreign\",\"security\",\"conflict\",\"summit\",\"statement\",\"plan\"\n]);\n\nfunction isMostlyAscii(text) {\n  const asciiChars = (text.match(/[a-zA-Z0-9\\s.,'\";:!?()\\-]/g) || []).length;\n  return asciiChars / (text.length || 1) >= MIN_ASCII_RATIO;\n}\n\nfunction englishWordRatio(text) {\n  const words = text.toLowerCase().split(/\\W+/);\n  let count = 0;\n  for (const w of words) if (englishCore.has(w)) count++;\n  return count / (words.length || 1);\n}\n\n// detect heavy foreign patterns like accented letters or double consonants\nfunction looksForeign(text) {\n  return /[àáâãäåæçèéêëìíîïñòóôõöøùúûüýÿßœčšž]/i.test(text);\n}\n\nfunction isEnglish(text) {\n  if (!isMostlyAscii(text)) return false;\n\n  const ratio = englishWordRatio(text);\n  const wordCount = text.split(/\\s+/).length;\n\n  // 1️⃣ automatic pass for very short clean ASCII headlines\n  if (wordCount <= SHORT_TEXT_WORDS && !looksForeign(text)) return true;\n\n  // 2️⃣ normal case\n  if (ratio >= MIN_ENGLISH_WORD_RATIO) return true;\n\n  // 3️⃣ fallback: low ratio but no foreign patterns → still English\n  if (!looksForeign(text)) return true;\n\n  // otherwise clearly foreign\n  return false;\n}\n\nfunction cleanFormerPresident(text) {\n  return text.replace(/\\bformer president\\s+(donald\\s+trump( jr)?|eric\\s+trump)\\b/gi, \"$1\");\n}\n\n// --- main ---\nconst output = [];\nconst rejected = [];\n\nfor (const item of $input.all()) {\n  let content = (item.json.post_content || item.json.text || \"\").trim();\n  content = cleanFormerPresident(content);\n\n  const wordCount = content.split(/\\s+/).length;\n  const english = isEnglish(content);\n  const passes = english && wordCount <= MAX_WORDS;\n\n  if (passes) {\n    item.json.post_content = content;\n    output.push(item);\n  } else {\n    item.json.filter_reason = !english\n      ? \"Non-English\"\n      : wordCount > MAX_WORDS\n      ? `Too long (${wordCount} words)`\n      : \"Other filter trigger\";\n    rejected.push(item);\n  }\n}\n\nconsole.log(`✅ English passed: ${output.length}, ❌ Rejected: ${rejected.length}`);\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1440,
+        464
+      ],
+      "id": "be4c8720-9208-4a38-a4f4-81e4f7e8484e",
+      "name": "Content Quality Filter",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2b3cbaf2-7bb9-4df2-b0fa-0e7efc99f973",
+              "leftValue": "={{ $json.source }}",
+              "rightValue": "RSS",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3920,
+        480
+      ],
+      "id": "73586c5a-ae8d-4b14-b242-30862c6d0e0b",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "50615597-83a8-479e-b26e-8c507161ffdc",
+              "leftValue": "={{ $json?.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3040,
+        576
+      ],
+      "id": "c1cf4301-d824-4101-ad36-5f81aac19043",
+      "name": "If2"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2784,
+        464
+      ],
+      "id": "4d80dbd0-b488-4cb9-bc7d-24c4eb82c9c8",
+      "name": "Merge5"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f167e4bf-2e57-4bce-b5f4-5649d2f823a9",
+              "leftValue": "={{ $json.post_content }}",
+              "rightValue": "No comment",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -912,
+        464
+      ],
+      "id": "4e581732-41f3-4d77-92c6-45fc3dc4bcba",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2ea16dc9-9f32-806f-aa19-e90dcaa769fe",
+          "mode": "list",
+          "cachedResultName": "Daily_News_posts",
+          "cachedResultUrl": "https://www.notion.so/2ea16dc99f32806faa19e90dcaa769fe"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "author|rich_text",
+              "textContent": "={{ $json.author || \"\"}}"
+            },
+            {
+              "key": "description|rich_text",
+              "textContent": "={{ $json?.description?.slice(0,2000) || \"\"}}"
+            },
+            {
+              "key": "published_at|date",
+              "date": "={{ $json.publishedAt ? $json.publishedAt : undefined }}"
+            },
+            {
+              "key": "title|title",
+              "title": "={{ $json.title || \"\"}}"
+            },
+            {
+              "key": "url|url",
+              "urlValue": "={{ $json.url || null}}"
+            },
+            {
+              "key": "post_content|rich_text",
+              "textContent": "={{ $json.post_content || '' }}"
+            },
+            {
+              "key": "llm_score|number",
+              "numberValue": "={{ $json?.output?.llm_score || 0 }}"
+            },
+            {
+              "key": "llm_comment|rich_text",
+              "textContent": "={{ $json?.output?.llm_comment || '' }}"
+            },
+            {
+              "key": "content|rich_text",
+              "textContent": "={{ $json.article?.slice(0,2000) || '' }}"
+            },
+            {
+              "key": "url_hash|rich_text",
+              "textContent": "={{ $json.url_hash }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -368,
+        608
+      ],
+      "id": "e925a37c-7e1d-4448-bf90-f171b02c0d4a",
+      "name": "Create a database page",
+      "retryOnFail": true,
+      "credentials": {
+        "notionApi": {
+          "id": "EQOQXAPEMAEwnxnU",
+          "name": "Daily_News_posts"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify($json.textForEmbedding) }}\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -368,
+        400
+      ],
+      "id": "4621c763-7bef-4a3e-9259-1700f6669d36",
+      "name": "HTTP Request3",
+      "credentials": {
+        "openAiApi": {
+          "id": "xCCAYjPcpsG7SZpm",
+          "name": "tweets_OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://c5b2ac61-ea4d-4482-8bed-059f617947ae.europe-west3-0.gcp.cloud.qdrant.io/collections/dailynews_embeddings/points?wait=true",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "qdrantRestApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"points\": $json.points } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        320
+      ],
+      "id": "ed399bad-5fc2-4149-b11d-4e4e1e2cae76",
+      "name": "HTTP Request",
+      "credentials": {
+        "qdrantRestApi": {
+          "id": "oQEsXAEnGclOFP8k",
+          "name": "Qdrant_Official"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const title = ($json.title || '').replace(/\\s+/g, ' ').trim();\nconst desc  = ($json.description || '').replace(/\\s+/g, ' ').trim();\n\n// build text for embedding\nlet textForEmbedding;\nif (title && desc) {\n  textForEmbedding = `${title} - ${desc}`;\n} else {\n  textForEmbedding = title || desc;\n}\n\nreturn {\n  ...$json, // keep url, url_hash, etc.\n  textForEmbedding\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        352
+      ],
+      "id": "86b2a8fc-1095-48a5-9d6a-e81c27e4bf72",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "jsCode": "function uuid() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {\n    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nconst points = items.map(item => ({\n  id: uuid(),\n  vector: item.json.data[0].embedding,\n  payload: {\n    content: item.json.textForEmbedding || \"\",\n    url: item.json.url || \"\",\n    urlHash: item.json.url_hash || \"\",\n    publishedAt: item.json.publishedAt\n      ? Math.floor(new Date(item.json.publishedAt).getTime() / 1000)\n      : Math.floor(Date.now() / 1000)\n  }\n}));\n\nreturn [{ json: { points } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "id": "e7e232c9-713e-47b4-a060-9111fc19312a",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -208,
+        320
+      ],
+      "id": "d37c3a8f-cdfb-4007-ba3a-ffae234ca8e9",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3SiLROoRm5IZMHoElwNFD",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3SiLROoRm5IZMHoElwNFD",
+          "cachedResultName": "newsroom — similarity check flow v3 (America_first_rss_gdelt)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ $json.url }}",
+            "title": "={{ $json.title }}",
+            "description": "={{ $json.description }}",
+            "author": "={{ $json.author }}",
+            "publishedAt": "={{ $json.publishedAt }}",
+            "urlToImage": "={{ $json.urlToImage }}",
+            "source": "={{ $json.source }}",
+            "url_hash": "={{ $json.url_hash }}",
+            "check_get_url": "={{ $json.check_get_url }}",
+            "output": "={{ $json.output }}",
+            "article": "={{ $json.article }}",
+            "from": "am_1st"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "author",
+              "displayName": "author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "publishedAt",
+              "displayName": "publishedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "urlToImage",
+              "displayName": "urlToImage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "url_hash",
+              "displayName": "url_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "check_get_url",
+              "displayName": "check_get_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "output",
+              "displayName": "output",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object"
+            },
+            {
+              "id": "article",
+              "displayName": "article",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "from",
+              "displayName": "from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -2416,
+        464
+      ],
+      "id": "0945c119-5448-4ea6-86e3-7e08e982c7d3",
+      "name": "Execute Workflow1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        800
+      ],
+      "id": "8ab3b34e-d81b-4951-b923-a3d1a0dd2ec4",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtMinute": 5
+            },
+            {
+              "field": "hours",
+              "triggerAtMinute": 25
+            },
+            {
+              "field": "hours",
+              "triggerAtMinute": 55
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -9280,
+        656
+      ],
+      "id": "9385ede6-2c0a-4a33-b879-22f083873818",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "function sanitizeValue(value) {\n  if (typeof value === \"string\") {\n    return value\n      // remove smart quotes & odd unicode quotes\n      .replace(/[\\u201C\\u201D\\u201E\\u201F\\u2033\\u2036]/g, \"\")\n      // remove standard double quotes\n      .replace(/\"/g, \"\")\n      // normalize line breaks\n      .replace(/\\r?\\n|\\r/g, \" \")\n      // normalize whitespace\n      .replace(/\\s+/g, \" \")\n      .trim();\n  }\n\n  if (Array.isArray(value)) {\n    return value.map(sanitizeValue);\n  }\n\n  if (value !== null && typeof value === \"object\") {\n    const cleaned = {};\n    for (const key in value) {\n      cleaned[key] = sanitizeValue(value[key]);\n    }\n    return cleaned;\n  }\n\n  // numbers, booleans, null remain untouched\n  return value;\n}\n\n// n8n input may be an array of items\nreturn items.map(item => ({\n  json: sanitizeValue(item.json)\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        608
+      ],
+      "id": "65c68d26-cfb8-4c14-aa90-5e2b89fe59eb",
+      "name": "Sanitize Payload1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "get trigger cycle": {
+      "main": [
+        [
+          {
+            "node": "global_config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "global_config": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "waqar split",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "domain_cookie_mapping": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "read rss items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "read rss items": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "waqar split": {
+      "main": [
+        [
+          {
+            "node": "domain_cookie_mapping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Merge_input_with_Redis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "article_link_check_Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge_input_with_Redis": {
+      "main": [
+        [
+          {
+            "node": "Not Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "article_link_check_Redis": {
+      "main": [
+        [
+          {
+            "node": "Merge_input_with_Redis",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Not Exists?": {
+      "main": [
+        [
+          {
+            "node": "Scoring",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Scoring",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scoring": {
+      "main": [
+        [
+          {
+            "node": "Mark article link In Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark article link In Redis": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Scoring",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "filter score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter score": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scape article": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "attach cookie": {
+      "main": [
+        [
+          {
+            "node": "scape article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "clean data": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gen Gettr Post": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "Content Quality Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Gen Gettr Post",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark article link In Redis1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Quality Filter": {
+      "main": [
+        [
+          {
+            "node": "Mark article link In Redis1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "attach cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Merge5",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge5": {
+      "main": [
+        [
+          {
+            "node": "clean data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sanitize Payload1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow1": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gen Gettr Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "get trigger cycle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize Payload1": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 600
+  },
+  "versionId": "7a7d8967-f82e-484e-81bd-b35c36f4484e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "nlx8y6q9JFnar53j",
+  "tags": []
+}

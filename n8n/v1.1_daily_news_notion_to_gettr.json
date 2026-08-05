@@ -1,0 +1,426 @@
+{
+  "name": "v1.1_daily_news_notion_to_gettr",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "22f16dc9-9f32-8055-8370-f487d183868f",
+          "mode": "list",
+          "cachedResultName": "daily_news",
+          "cachedResultUrl": "https://www.notion.so/22f16dc99f3280558370f487d183868f"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "send_status|checkbox",
+              "condition": "does_not_equal",
+              "checkboxValue": true
+            },
+            {
+              "key": "status|status",
+              "condition": "equals",
+              "statusValue": "waiting for post"
+            },
+            {
+              "key": "media|files",
+              "condition": "is_not_empty"
+            },
+            {
+              "key": "post_content|rich_text",
+              "condition": "is_not_empty"
+            }
+          ]
+        },
+        "options": {
+          "sort": {
+            "sortValue": [
+              {
+                "key": "Urgency|select",
+                "direction": "descending"
+              },
+              {
+                "key": "Created time|created_time",
+                "direction": "ascending"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -1808,
+        912
+      ],
+      "id": "ce20acf7-98cf-494e-af51-72049089fee2",
+      "name": "Get many database pages",
+      "retryOnFail": true,
+      "credentials": {
+        "notionApi": {
+          "id": "16Cv1KCiYFFI3cF1",
+          "name": "DailyNews - Database for Editor"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "check_get",
+        "key": "={{ $('config').item.json.redis_key_prefix + $json.hash }}",
+        "keyType": "string",
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "name": "Check Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1360,
+        976
+      ],
+      "id": "d23a3f4f-427c-45cc-8ddb-f205d9f28470",
+      "alwaysOutputData": false,
+      "credentials": {
+        "redis": {
+          "id": "7KNoWHz8WpypqT8l",
+          "name": "Redis-Upstash Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1136,
+        896
+      ],
+      "id": "c41e37a9-5085-4eba-b118-8794fc4a5e66",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4c1347a4-10cb-479d-80e8-2ffc71a449c1",
+              "name": "pub_post_author_id",
+              "value": "dailynews",
+              "type": "string"
+            },
+            {
+              "id": "9d3e589e-913f-4cfa-b620-68c7f807ef7a",
+              "name": "pub_post_author_token",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkYWlseW5ld3MiLCJ1c2VybmFtZSI6ImRhaWx5bmV3cyIsImxldmVsIjo0LCJndmVyIjoiMkU2NTkxOEYiLCJjdmVyIjoiNjY2ODhMIiwiaWF0IjoxNzUyODUyOTk4LCJleHAiOjIwNjgyMTI5OTh9.P45jyUUX4MtdRQqUvdvguVaPRAGz5j3p9y3BA4DCcsw",
+              "type": "string"
+            },
+            {
+              "id": "ed115d38-690a-4d90-ba2b-57d81b822bb5",
+              "name": "redis_key_prefix",
+              "value": "newsroom:dailynews:post:",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2016,
+        896
+      ],
+      "id": "d4ea3df6-e1c8-44b3-afcb-06407834e6fd",
+      "name": "config"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtMinute": 20
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2240,
+        912
+      ],
+      "id": "d7d7b88e-70f5-4069-9b6b-7ce66e3e3b16",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "functionCode": "const crypto = require('crypto');\n\nfor (const item of items) {\n  let postContent = item.json.property_post_content || '';\n  const mediaUrl = Array.isArray(item.json.property_media) && item.json.property_media.length > 0\n    ? item.json.property_media[0]\n    : '';\n\n  // 1. 文本裁剪 (limit to 500 characters for simplicity)\n  postContent = postContent.substring(0, 500);\n\n  // 2. 去掉URL参数再拼接\n  let cleanMediaUrl = '';\n  if (mediaUrl) {\n    // Remove URL parameters (everything after ?)\n    cleanMediaUrl = mediaUrl.split('?')[0];\n  }\n\n  const combinedContent = `${postContent}${cleanMediaUrl}`.trim();\n\n  if (combinedContent) {\n    // 3. 用最简单的方法计算hash - 直接对原始内容计算\n    const hash = crypto.createHash('sha1').update(combinedContent).digest('hex').slice(0, 12);\n    item.json.hash = hash;\n  } else {\n    item.json.hash = null;\n  }\n}\n\nreturn items;"
+      },
+      "name": "Cal Post Hash",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1584,
+        896
+      ],
+      "id": "694edaab-391d-4708-9753-984eae1c89e6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Find the first item where check_get is null\nconst targetItem = items.find(item => item.json.check_get === null);\n\nif (targetItem) {\n  return [ targetItem.json ];  // Return as array of json\n} else {\n  return [];  // No matching item found\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        896
+      ],
+      "id": "a09dab7a-4a51-4322-87fe-e6290e227c83",
+      "name": "Find One"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "pxySqcRGdXdwuGlg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/pxySqcRGdXdwuGlg",
+          "cachedResultName": "newsroom — v1.0_subflow_dailynews_to_gettr"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "media": "={{ $json.property_media }}",
+            "post_content": "={{ $json.property_post_content }}",
+            "notion_page_id": "={{ $json.id }}",
+            "published_at": "={{ $json.property_last_edited_time }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "media",
+              "displayName": "media",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "post_content",
+              "displayName": "post_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "notion_page_id",
+              "displayName": "notion_page_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -704,
+        912
+      ],
+      "id": "79726d6c-e6b6-493e-8f7b-553d06acee6b",
+      "name": "pub_post_to_gettr"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Find One').first().json.id}}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "send_status|checkbox",
+              "checkboxValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        912
+      ],
+      "id": "949ebe0a-8e93-40fd-acd0-3c7c8ac61ff0",
+      "name": "update send status",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "notionApi": {
+          "id": "16Cv1KCiYFFI3cF1",
+          "name": "DailyNews - Database for Editor"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Cal Post Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Redis": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Find One",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "config": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cal Post Hash": {
+      "main": [
+        [
+          {
+            "node": "Check Redis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find One": {
+      "main": [
+        [
+          {
+            "node": "pub_post_to_gettr",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pub_post_to_gettr": {
+      "main": [
+        [
+          {
+            "node": "update send status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "o8fJi28bhPtWuusr",
+    "timeSavedMode": "fixed",
+    "executionTimeout": 600,
+    "availableInMCP": false
+  },
+  "versionId": "9b24842a-f2c6-4bd3-8ce3-8457f25c4011",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "82EZlUERkHkfKEFE",
+  "tags": [
+    {
+      "updatedAt": "2025-07-21T15:12:28.140Z",
+      "createdAt": "2025-07-21T15:12:28.140Z",
+      "id": "Jug2J6mMV100UtCp",
+      "name": "DAILYNEWS"
+    },
+    {
+      "updatedAt": "2025-07-05T03:21:24.203Z",
+      "createdAt": "2025-07-05T03:21:24.203Z",
+      "id": "KPWthcboPhh3rAk4",
+      "name": "PRODUCTION"
+    }
+  ]
+}

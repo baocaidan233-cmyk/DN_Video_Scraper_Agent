@@ -1,0 +1,7 @@
+Pillow>=10.4.0
+httpx>=0.27.0
+PyYAML>=6.0
+# --auto subject extraction only (extract.py): OpenAI is the default provider,
+# anthropic is the alternate (HEADLINE_CARD_PROVIDER=anthropic).
+openai>=1.0
+anthropic>=0.44.0

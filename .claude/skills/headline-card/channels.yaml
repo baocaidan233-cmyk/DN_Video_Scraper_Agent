@@ -1,0 +1,22 @@
+# Per-channel branding for the headline-card skill.
+# Used by generate.py --pipeline {dn,ef}. Paths are relative to this skill
+# directory (or absolute). Drop the real channel logos into assets/ — until
+# then the card renders fine, just without a logo.
+
+dn:
+  name: DailyNews
+  logo_path: assets/dn_logo.png      # supply this PNG (transparent bg recommended)
+  logo_position: top-right           # top-right | top-left | bottom-right | bottom-left
+  default_tag: ""                    # e.g. "BREAKING" — leave empty for no tag badge
+
+ef:
+  name: EpicFury
+  logo_path: ""                      # EF cards intentionally carry no logo
+  logo_position: top-right
+  default_tag: ""
+
+# Font used to draw the title. Leave empty to auto-detect a system CJK font
+# (needs `fonts-noto-cjk` on Linux). Set to an absolute .ttf/.ttc/.otf path,
+# or override at runtime with the HEADLINE_CARD_FONT env var / --font flag.
+font_path: ""
+font_index: 0

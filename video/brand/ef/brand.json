@@ -1,0 +1,20 @@
+{
+  "_comment": "EpicFury brand. No logo file \u2014 headline-card's channels.yaml records that EF cards intentionally carry no logo, so videos end on the static end card rather than the animated logo outro. Set `handle` to the real EF Gettr handle before enabling video for this channel.",
+  "handle": "@EpicFury",
+  "logo": "",
+  "accent": "0xE60023",
+  "outro_accent": "0xFF1E1E",
+  "voice": "en-US-AndrewNeural",
+  "provider": "edge",
+  "rate": 190,
+  "music_mood": "tense",
+  "music_fadeout": 2.5,
+  "burn_credits": true,
+  "karaoke": false,
+  "animated_outro": false,
+  "min_photos": 5,
+  "prefer_source_photos": false,
+  "width": 960,
+  "height": 720,
+  "preset": "veryfast"
+}

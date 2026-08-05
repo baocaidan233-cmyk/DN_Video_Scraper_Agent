@@ -1,0 +1,16 @@
+## DailyNews Post Generation Rules
+
+1. Generate posts in English ONLY.
+   - All content — regardless of language or length — is sent through LLM rewrite.
+   - If the source content is in a non-English language, translate it to English.
+
+2. Source article filtering (before LLM rewrite):
+   - English-language source articles with fewer than 40 words are dropped entirely.
+   - Non-English articles are never filtered on word count (CJK/Arabic have no spaces).
+
+3. Word count (strictly enforced):
+   - Target: 55-75 words. This is a strict range — do not go below 55 or above 75.
+   - Hard limit: 75 words maximum. Count every word. Do not exceed under any circumstance.
+   - If the LLM output exceeds 75 words, it is retried once with a word-count reminder.
+
+4. Do NOT trim the generated post after LLM output.

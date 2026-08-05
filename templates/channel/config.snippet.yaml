@@ -1,0 +1,74 @@
+# =====================================================================
+# CHANNEL: __CHANNEL__   —  append this entry under the top-level `channels:`
+# list in config.yaml. (Create the `channels:` key once if it doesn't exist.)
+# =====================================================================
+# Replace every __PLACEHOLDER__. See DEPLOY.md for the token table.
+# NO code changes are needed — main.py builds every channel in this list.
+#
+# Redis key prefixes are DERIVED from `slug` automatically (slug:title_hash:,
+# slug:review:queue, slug:publish:queue, ...), so channels can never collide as
+# long as their slugs differ. You do not set Redis keys here.
+
+channels:
+  - slug: __CHANNEL__               # unique id: lowercase letters/digits only
+    title: __CHANNEL_TITLE__        # dashboard header (optional; defaults to slug)
+    dashboard_port: __PORT__        # must be free and unique (not 8080/8081)
+    enabled: true
+    video_score_boost: 1.0
+    # Prompt + schedule paths auto-derive from slug:
+    #   prompts/__CHANNEL___score_articles.txt
+    #   prompts/__CHANNEL___generate_post_system.txt
+    #   prompts/__CHANNEL___generate_post_user.txt
+    #   data/schedule___CHANNEL__.json
+    # Override only if you want different paths:
+    # score_prompt: prompts/__CHANNEL___score_articles.txt
+
+    source:
+      sources_md_path: sources/__CHANNEL___sources.md
+      filter_feed_hours: 2
+      max_articles_per_website: 15
+      filter_score_threshold: 6.0   # drop articles scoring below this (0–10)
+      keywords:                     # X search / relevance keywords
+        - __KEYWORD_1__
+        - __KEYWORD_2__
+        - __KEYWORD_3__
+      x:
+        tweets_per_account: 30
+        credentials:
+          - username: __X_USERNAME__
+            password: __X_PASSWORD__
+            email: __X_EMAIL__
+            cookies_file: data/__CHANNEL___x_cookies_1.txt
+      twitterapi:
+        api_key: __TWITTERAPI_KEY__       # twitterapi.io — reuse existing key if shared
+        base_url: https://api.twitterapi.io
+        tweets_per_account: 20
+      socialdata:
+        api_key: __SOCIALDATA_KEY__       # socialdata.tools — reuse existing key if shared
+        base_url: https://api.socialdata.tools
+        tweets_per_account: 20
+      x_scraper: twitterapi               # "twitterapi" | "socialdata" (togglable live)
+
+    qdrant:                               # omit this whole block to share config.qdrant
+      url: __QDRANT_URL__
+      api_key: __QDRANT_API_KEY__         # must grant rw on the collection below
+      collection: __CHANNEL___embeddings  # create it: vector_size 1536, distance Cosine
+      vector_size: 1536
+      within_batch_threshold: 0.70
+      cross_batch_threshold: 0.75
+      cross_batch_hours: 48
+
+    gettr:
+      api_url: https://gettr.com/api/u/post
+      user_id: __GETTR_USER_ID__
+      user_token: __GETTR_JWT__
+
+    telegram:
+      enabled: false                      # Notion is the review mechanism; Telegram stays off
+      bot_token: __TELEGRAM_BOT_TOKEN__   # REQUIRED even when disabled — a non-empty token
+                                          # gates whether the pipeline starts (mirrors EpicFury)
+
+    notion_review:
+      api_key: __NOTION_API_KEY__         # can reuse the shared Notion integration token
+      review_database_id: __NOTION_REVIEW_DB_ID__   # 32-char id of the new review database
+      poll_interval_s: 30

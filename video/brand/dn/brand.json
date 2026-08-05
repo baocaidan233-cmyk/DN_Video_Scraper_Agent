@@ -1,0 +1,21 @@
+{
+  "_comment": "DailyNews brand + standing production preferences for video/scripts/make_news_video.py. Paths are relative to THIS directory. Selected with --brand-dir video/brand/dn.",
+  "handle": "@DailyNews",
+  "logo": "logo.png",
+  "accent": "0xE60023",
+  "outro_accent": "0xFF1E1E",
+  "voice": "en-US-AndrewNeural",
+  "provider": "edge",
+  "rate": 190,
+  "music_mood": "tense",
+  "music_fadeout": 2.5,
+  "burn_credits": true,
+  "karaoke": false,
+  "animated_outro": true,
+  "outro": "outro.mp4",
+  "min_photos": 5,
+  "prefer_source_photos": false,
+  "width": 960,
+  "height": 720,
+  "preset": "veryfast"
+}

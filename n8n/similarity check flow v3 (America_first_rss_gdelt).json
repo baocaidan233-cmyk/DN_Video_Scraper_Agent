@@ -1,0 +1,1013 @@
+{
+  "name": "similarity check flow v3 (America_first_rss_gdelt)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "\n{\n\"url\": \n\"https://www.zerohedge.com/personal-finance/why-diversification-failing-age-passive-investing\",\n\"title\": \n\"Why Diversification Is Failing In The Age Of Passive Investing\",\n\"description\": \n\"Why Diversification Is Failing In The Age Of Passive Investing\\n\\n            \\nAuthored by Lance Roberts via RealInvestmentAdvice.com,\\nDiversification has been the backbone of “buy and hold” strategies for the last few decades. It was a boon to financial advisors who couldn’t actively manage portfolios, and it created a massive Exchange-Traded Funds (ETFs) industry that allowed for even further simplification of investing. The message was basic: “Buy a basket of assets, dollar cost average, and given enough time, you will grow your wealth.”\\n\\n\\n\\nBut where did that marketing revolution come from? Based on the premise of index investing, it created massive firms like Vanguard, Fidelity, BlackRock, and others. For that answer, we need to go back in time to 1952. Then, Harry Markowitz revolutionized investment strategy with his portfolio choice theory. His work, for which he received a Nobel Prize, gave rise to what we now know as Modern Portfolio Theory (MPT), which proposed that the best por\",\n\"author\": null,\n\"publishedAt\": \"2025-09-08T16:40:00.000Z\",\n\"urlToImage\": null,\n\"source\": \"RSS\",\n\"url_hash\": \"41d2a971\",\n\"check_get_url\": null,\n\"output\": \n{\n\"llm_score\": \n2,\n\"llm_comment\": \n\"The article does not mention China, the CCP, or any related institutions, and it does not have a clear impact on China's strategy, economy, or security.\",\n\"source\": \"crypto_news\"\n},\n  \n\"article\": \n\"Die EU-Kommission will europÃ¤ischen Unternehmen den Zugang zu Rohstoffen wie Lithium und Seltenen Erden sichern. Die EU soll unabhÃ¤ngiger von China werden, das den Weltmarkt fÃ¼r zahlreiche Rohstoffe kontrolliert.\\n\\nDie Kommission will das Zentrum nach eigener Aussage bereits Anfang des kommenden Jahres aufsetzen. Mehrere Unternehmen auch aus verschiedenen LÃ¤ndern sollen eine EU-Plattform nutzen kÃ¶nnen, um gemeinsam Rohstoffe zu importieren und so einen niedrigeren Preis auszuhandeln oder Genehmigungs- und Transportkosten zu sparen. In den kommenden Monaten soll auÃerdem ein Pilotprojekt fÃ¼r gemeinsame VorrÃ¤te anlaufen.\\n\\nAktuell bezieht die europÃ¤ische Industrie fast ihren gesamten Bedarf an Lithium und Seltenen Erden aus China. Die Materialien stecken in Magneten und Halbleitern, die in der Automobil-, Elektronik- und Verteidigungsindustrie verwendet werden. China ist der weltweit grÃ¶Ãte Produzent und hÃ¤lt viele Patente fÃ¼r Technologien zur Veredelung und Weiterverarbeitung der Metalle.\\n\\nDie Dominanz ist mittlerweile ein offen eingesetztes Druckmittel: Seit April verlangt China Lizenzen fÃ¼r bestimmte Exporte, im Oktober drohte Peking mit einer VerschÃ¤rfung. EU-Kommissar SÃ©journÃ© warf China \\\"Erpressung\\\" vor. Seiner Aussage nach erteilt Peking die Lizenzen nur stÃ¼ckchenweise oder im Austausch fÃ¼r Betriebsgeheimnisse, sodass Lieferungen in den RÃ¼ckstand geraten.\\n\\nBrÃ¼ssel will deshalb die Produktion innerhalb der EU ankurbeln. DafÃ¼r sollen Genehmigungsverfahren\",\n\"from\": \"am_1st\"\n\n}"
+      },
+      "id": "fcd85008-d8d3-4f48-aada-d670eb7dcd44",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -1952,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1744,
+        416
+      ],
+      "id": "0b83600a-bf22-43c2-becf-7b4ddec3dcb8",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// If no related articles exist, just return the original article (clean fields only)\nreturn [\n  {\n    json: {\n      url: $json.url,\n      title: $json.title,\n      description: $json.description,\n      author: $json.author,\n      publishedAt: $json.publishedAt,\n      urlToImage: $json.urlToImage,\n      source: $json.source,\n      url_hash: $json.url_hash,\n      check_get_url: $json.check_get_url,\n      output: $json.output,\n      article: $json.article\n    \n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        336
+      ],
+      "id": "7f343734-922f-4fa9-9c0d-cd8b5aa8cb82",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "896170fd-d86c-49e3-8a9a-6af432abed56",
+              "leftValue": "={{ $json.hasArticles }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2112,
+        400
+      ],
+      "id": "ecef562b-fe81-4880-8b55-bdfb402d6b1a",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// items[0] = original article\n// items[1..N] = related articles from Qdrant\n\nconst original = items[0].json;\n\n// Grab related ones (they have `score`)\nconst related = items.slice(1).filter(i => i.json.score !== undefined);\n\n// Flag: do we have any related?\nconst hasArticles = related.length > 0;\n\n// Collect scores and preserve full related docs\nconst relatedScores = related.map(r => r.json.score);\nconst relatedArticles = related.map(r => r.json);\n\n// Return the original article enriched with related info\nreturn [\n  {\n    json: {\n      ...original,\n      hasArticles,\n      relatedScores,\n      relatedArticles\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        368
+      ],
+      "id": "06577ca2-39d8-4b86-8da8-6ac906c1c90a",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const scores = $json.relatedScores || [];\nconst matches = $json.relatedArticles || [];\nconst threshold = 0.80;\n\nlet hasHighScore = false;\nlet bestScore = null;\nlet bestMatch = null;\n\nfor (let i = 0; i < scores.length; i++) {\n  const score = scores[i];\n  if (score > threshold) {\n    hasHighScore = true;\n  }\n  if (bestScore === null || score > bestScore) {\n    bestScore = score;\n    bestMatch = matches[i];\n  }\n}\n\nreturn [\n  {\n    json: {\n      url: $json.url,\n      title: $json.title,\n      description: $json.description,\n      author: $json.author,\n      publishedAt: $json.publishedAt,\n      urlToImage: $json.urlToImage,\n      source: $json.source,\n      url_hash: $json.url_hash,\n      check_get_url: $json.check_get_url,\n      output: $json.output,\n      article: $json.article,\n\n      // Step 2 dedup info\n      duplicate: hasHighScore,\n      crossBatchScore: bestScore,\n      crossBatchMatchedUrl: bestMatch?.document?.metadata?.url || null,\n      crossBatchMatchedContent: bestMatch?.document?.pageContent || null\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2336,
+        560
+      ],
+      "id": "3b9f2b65-c792-45ea-8a21-361184bb8eaf",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "23316dc9-9f32-806a-9ce7-e9bd3edd2b61",
+          "mode": "list",
+          "cachedResultName": "china_breaks_log",
+          "cachedResultUrl": "https://www.notion.so/23316dc99f32806a9ce7e9bd3edd2b61"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "llm_score|number",
+              "numberValue": "={{ $json.output.llm_score }}"
+            },
+            {
+              "key": "article_title|rich_text",
+              "textContent": "={{ $json.title }}"
+            },
+            {
+              "key": "article_link|url",
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "article_link_hash|rich_text",
+              "textContent": "={{ $json.url_hash }}"
+            },
+            {
+              "key": "from_node|rich_text",
+              "textContent": "similarity_check_chinabreaks"
+            },
+            {
+              "key": "llm_comment|rich_text",
+              "textContent": "={{ $json.output.llm_comment }}"
+            },
+            {
+              "key": "similarity_score|number",
+              "numberValue": "={{ $json.crossBatchScore }}"
+            },
+            {
+              "key": "matching_article_url|url",
+              "urlValue": "={{ $json.crossBatchMatchedUrl }}"
+            },
+            {
+              "key": "matching_article_title|rich_text",
+              "textContent": "={{ $json.crossBatchMatchedContent }}"
+            },
+            {
+              "key": "description|rich_text",
+              "textContent": "={{ $json.description }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2880,
+        448
+      ],
+      "id": "5ea70ce2-ba7b-461e-8d7d-2f232d28de8b",
+      "name": "Create a database page1",
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8adb4d51-040d-452e-8136-1eea5e14df0d",
+              "leftValue": "={{$json.duplicate}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2528,
+        512
+      ],
+      "id": "3bd3742f-c613-434f-9581-ecb53d870e62",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      url: $json.url,\n      title: $json.title,\n      description: $json.description,\n      author: $json.author,\n      publishedAt: $json.publishedAt,\n      urlToImage: $json.urlToImage,\n      source: $json.source,\n      url_hash: $json.url_hash,\n      check_get_url: $json.check_get_url,\n      output: $json.output,\n      article: $json.article\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        592
+      ],
+      "id": "afc84d11-1d57-4a71-9a50-1ea16db8f967",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        512
+      ],
+      "id": "1b917f29-ef58-464c-bd8a-b86effe99b68",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f22f8f5f-43fe-4e54-9da8-0567bbfd0479",
+              "name": "url",
+              "value": "={{ $json.url }}",
+              "type": "string"
+            },
+            {
+              "id": "be6e936e-efb2-4e77-835a-cab067a5ffdd",
+              "name": "title",
+              "value": "={{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "b6dcb9e4-21f6-43ed-86fb-ad0f3b10e0b1",
+              "name": "description",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            },
+            {
+              "id": "233d01c5-2c56-4ab5-9469-813e6084c3d8",
+              "name": "author",
+              "value": "={{ $json.author }}",
+              "type": "string"
+            },
+            {
+              "id": "68437b09-40a3-462e-89e0-e85a4e7cd193",
+              "name": "publishedAt",
+              "value": "={{ $json.publishedAt }}",
+              "type": "string"
+            },
+            {
+              "id": "a15f54de-840b-4590-8d28-9b3f28990e71",
+              "name": "urlToImage",
+              "value": "={{ $json.urlToImage }}",
+              "type": "string"
+            },
+            {
+              "id": "926188d5-7b35-4151-9b01-4fadb64951f0",
+              "name": "source",
+              "value": "={{ $json.source }}",
+              "type": "string"
+            },
+            {
+              "id": "a3427542-1bdf-4710-933e-44ca3217721e",
+              "name": "url_hash",
+              "value": "={{ $json.url_hash }}",
+              "type": "string"
+            },
+            {
+              "id": "e38b5688-da87-4e3c-8353-6c1e085f62a1",
+              "name": "check_get_url",
+              "value": "={{ $json.check_get_url }}",
+              "type": "string"
+            },
+            {
+              "id": "3dc0cb86-9bd6-48d0-a606-69c2d38e9f86",
+              "name": "output",
+              "value": "={{ $json.output }}",
+              "type": "object"
+            },
+            {
+              "id": "4708791b-5dd2-4439-8548-7c5071527fd1",
+              "name": "embedding",
+              "value": "={{ $json.embedding }}",
+              "type": "array"
+            },
+            {
+              "id": "45714f8e-5015-49f2-9d2b-420b4927fe7f",
+              "name": "from",
+              "value": "={{ $json.from }}",
+              "type": "string"
+            },
+            {
+              "id": "dbca942c-11e1-4bcf-8239-4dbdbb2f6d6c",
+              "name": "article",
+              "value": "={{ $json.article }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        384,
+        512
+      ],
+      "id": "f5ac8cfb-bc3c-4a8b-a455-299de022638f",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3312,
+        336
+      ],
+      "id": "f31b33d1-f124-47e2-a29a-df9f3c87475a",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "if ($json.duplicate === true) {\n  // send a minimal placeholder so loop continues\n  return [{ json: { continue: true } }];\n} else {\n  // forward the unique item\n  return [\n    {\n      json: {\n        url: $json.url,\n        title: $json.title,\n        description: $json.description,\n        author: $json.author,\n        publishedAt: $json.publishedAt,\n        urlToImage: $json.urlToImage,\n        source: $json.source,\n        url_hash: $json.url_hash,\n        check_get_url: $json.check_get_url,\n        output: $json.output,\n        article: $json.article\n      }\n    }\n  ];\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3440,
+        624
+      ],
+      "id": "41e144e5-16ff-4aa6-85d9-e6f1c0b241b6",
+      "name": "Code4",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep only items that have a URL (or any required field).\nreturn items.filter(item => item.json.url);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        288
+      ],
+      "id": "eb4456b1-0d19-4c5e-a7e6-cf23790f9d20",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e664a7f3-ac5c-4347-bf42-a923a0d6364a",
+              "name": "duplicate",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3088,
+        400
+      ],
+      "id": "a4ceb4c1-d62f-40b8-8ab8-77c6f091c9d5",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "jsCode": "function cosineSim(a, b) {\n  let dot = 0.0, normA = 0.0, normB = 0.0;\n  for (let i = 0; i < a.length; i++) {\n    dot += a[i] * b[i];\n    normA += a[i] * a[i];\n    normB += b[i] * b[i];\n  }\n  return dot / (Math.sqrt(normA) * Math.sqrt(normB));\n}\n\nconst threshold = 0.70; // tweak as needed\nconst deduped = [];\nconst results = [];\n\nfor (const item of items) {\n  const emb = item.json.embedding;\n  let isDup = false;\n  let simScore = null;\n  let matchUrl = null;\n  let matchTitle = null;\n\n  for (const kept of deduped) {\n    const sim = cosineSim(emb, kept.json.embedding);\n    if (sim > threshold) {\n      isDup = true;\n      simScore = sim;          // store score that triggered duplicate\n      matchUrl = kept.json.url;\n      matchTitle = kept.json.title;\n      break;                   // keep your original \"stop at first match\"\n    }\n  }\n\n  results.push({\n    json: {\n      ...item.json,\n      duplicate: isDup,\n      similarity: simScore,     // null if unique, number if dup\n      matchedUrl: matchUrl,     // URL of the article it matched\n      matchedTitle: matchTitle  // Title of the article it matched\n    }\n  });\n\n  if (!isDup) {\n    deduped.push(item);\n  }\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        528
+      ],
+      "id": "c1580318-68f5-4e8b-94a2-96463ec14f53",
+      "name": "BatchDedup"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Content-Type\": \"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify($json.textForEmbedding) }}\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1456,
+        576
+      ],
+      "id": "2ed5435e-9930-43b9-ad5a-6da0b5ff8ff1",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openAiApi": {
+          "id": "xCCAYjPcpsG7SZpm",
+          "name": "tweets_OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const title = ($json.title || '').replace(/\\s+/g, ' ').trim();\nconst desc  = ($json.description || '').replace(/\\s+/g, ' ').trim();\n\nreturn {\n  ...$json,\n  textForEmbedding: `${title} ${desc}`\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1696,
+        576
+      ],
+      "id": "8a6fa9c3-12b0-4873-96c6-f0bfdb50d81f",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    url: $json.url,\n    title: $json.title,\n    description: $json.description,\n    author: $json.author,\n    publishedAt: $json.publishedAt,\n    source: $json.source,\n    url_hash: $json.url_hash,\n    urlToImage:$json.urlToImage,\n    check_get_url:$json.check_get_url ,\n    output: $json.output,\n    article: $json.article,\n    from: $json.from,\n    textForEmbedding: $json.textForEmbedding,\n    embedding: $json.data[0].embedding // extract clean vector\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        512
+      ],
+      "id": "800c8fef-de7c-48b0-94b0-c5c53b8727e9",
+      "name": "Code7"
+    },
+    {
+      "parameters": {
+        "content": "# Step 1: inter_batch similarity check\n",
+        "height": 1056,
+        "width": 2080,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2096,
+        16
+      ],
+      "typeVersion": 1,
+      "id": "d5263db9-69da-43ca-836c-d1f19e42c10f",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1168,
+        416
+      ],
+      "id": "35f017a9-9202-49ac-a87d-b7194e99f6f7",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fe16492d-6638-479f-9164-914ca461ea7b",
+              "leftValue": "={{$json.duplicate}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -464,
+        528
+      ],
+      "id": "d34c556a-c619-41da-a676-717ba971a3d9",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "23316dc9-9f32-806a-9ce7-e9bd3edd2b61",
+          "mode": "list",
+          "cachedResultName": "china_breaks_log",
+          "cachedResultUrl": "https://www.notion.so/23316dc99f32806a9ce7e9bd3edd2b61"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "llm_score|number",
+              "numberValue": "={{ $json.output.llm_score }}"
+            },
+            {
+              "key": "article_link_hash|rich_text",
+              "textContent": "={{ $json.url_hash }}"
+            },
+            {
+              "key": "from_node|rich_text",
+              "textContent": "similarity_check_chinabreaks"
+            },
+            {
+              "key": "llm_comment|rich_text",
+              "textContent": "={{ $json.output.llm_comment }}"
+            },
+            {
+              "key": "similarity_score|number",
+              "numberValue": "={{ $json.similarity }}"
+            },
+            {
+              "key": "matching_article_title|rich_text",
+              "textContent": "={{ $json.matchedTitle }}"
+            },
+            {
+              "key": "matching_article_url|url",
+              "urlValue": "={{ $json.matchedUrl }}"
+            },
+            {
+              "key": "article_title|rich_text",
+              "textContent": "={{ $json.title }}"
+            },
+            {
+              "key": "article_link|url",
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "description|rich_text",
+              "textContent": "{{ $json.description }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        352
+      ],
+      "id": "48d6fcda-c4e2-44fb-a1c7-464c82926866",
+      "name": "Create a database page",
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "# Step 2:  filter duplicate against vector Db",
+        "height": 1072,
+        "width": 3664,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "0076015b-2286-4da6-83b2-2cf0cebe6732",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const embedding = $json.embedding;   // from OpenAI embeddings response\nconst now = Math.floor(Date.now() / 1000);   // current Unix timestamp\nconst cutoff = now - (48 * 60 * 60);\n         // 12 hours ago in seconds\n\nreturn [\n  {\n    json: {\n      queryBody: {\n        query: embedding,\n        limit: 5,\n        filter: {\n          must: [\n            {\n              key: \"publishedAt\",\n              range: {\n                gte: cutoff,\n                lte: now\n              }\n            }\n          ]\n        },\n        with_payload: true\n      }\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        624
+      ],
+      "id": "8361b7a3-1fc5-44de-8206-563d0c40d3e2",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.queryUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "qdrantApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.queryBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1216,
+        624
+      ],
+      "id": "4924603e-5aad-4a71-b4aa-6f5f3e07a174",
+      "name": "HTTP Request2",
+      "credentials": {
+        "qdrantApi": {
+          "id": "pUZfycIzoIymyuEf",
+          "name": "QdrantApi-DailyNews"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: response from Query Points\n// Output: array of related docs in the old format\n\nconst results = [];\nfor (const point of $json.result?.points || []) {\n  results.push({\n    json: {\n      document: {\n        pageContent: point.payload.content || \"\",\n        metadata: {\n          url: point.payload.url || null,\n          urlHash: point.payload.urlHash || null,\n          publishedAt: point.payload.publishedAt || null\n        }\n      },\n      score: point.score || 0\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        624
+      ],
+      "id": "e2ef2ea8-5511-4163-b9ef-c209f6490f73",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Decide which Qdrant collection to query based on the \"source\" field\nlet collection;\n\nif ( $('Edit Fields1').first().json.from=== \"am_1st\") {\n  collection = \"dailynews_embeddings\";\n} else {\n  // default to news if source not explicitly \"crypto_policy\"\n  collection = \"dailynews_embeddings\";\n}\n\n// Build dynamic queryUrl\nreturn [{\n  json: {\n    ...$json,\n    queryUrl: `https://c5b2ac61-ea4d-4482-8bed-059f617947ae.europe-west3-0.gcp.cloud.qdrant.io/collections/${collection}/points/query`\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        624
+      ],
+      "id": "0128fa33-ad9a-44a0-85c7-1b03d7ace0b7",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "url": "https://www.ft.com/content/c7a24acc-bfe1-4650-9c2a-ff9b20c8b89b",
+          "title": "Putin meets Modi to talk oil, arms and Trump tariffs",
+          "description": "Russia and India seek to deepen energy and security ties that have been tested by western pressure",
+          "author": null,
+          "publishedAt": "2025-12-03T21:00:04.000Z",
+          "urlToImage": null,
+          "source": "RSS",
+          "url_hash": "6866f5b2e29105eb",
+          "check_get_url": null,
+          "output": {
+            "llm_score": 6,
+            "llm_comment": "The meeting between Putin and Modi highlights a significant geopolitical alignment that could indirectly affect China's strategic standing, particularly in energy and security realms, but lacks direct implications for the CCP."
+          },
+          "article": "Prime Minister Narendra Modi and President Vladimir Putin have graced billboards across India in recent weeks. One caption reads: “The dialogue began decades ago. We’re just turning up the volume.” Another hails the “old friendship” between the two nations. \nThe campaign, for the launch of state-owned Russia Today’s television news channel in \nIndia\n, comes ahead of Putin’s arrival in New Delhi on Thursday for talks that India’s foreign ministry said would cover all aspects of the countries’ “special and privileged strategic partnership”.\nThe annual India-Russia Summit, which Putin founded 25 years ago, aims to strengthen a relationship that dates back to the cold war and has been solidified by energy and defence co-operation.\nBut those ties have been strained by tensions with the west over Moscow’s invasion of Ukraine and US tariffs on New Delhi over its purchases of Russian oil.\n“There are challenges to the India-Russia relationship, particularly because of India’s increasing engagement with the west and the toxicity of Russia in the west,” said Nandan Unnikrishnan at the Observer Research Foundation think-tank in New Delhi. “But India is never going to give up on Russia totally.”\nPutin’s spokesperson Dmitry Peskov told reporters on Tuesday that discussions over sales of fighter jets and surface-to-air missiles — both of interest for New Delhi — would be “high on the agenda” this week.\nPutin’s last visit to India was in December 2021, just before he launched his full-scale invasion of Ukraine in February 2022. Since then, India has become Moscow’s \nlargest buyer of seaborne crude\n, importing nearly $140bn worth of Russian oil, government data shows.\nDonald Trump has accused Modi of helping fund Putin’s war machine and complained that “India buys most of its oil and military products from Russia, very little from the US”. In August, he imposed a 25 per cent punitive tariff on Indian goods, bringing Washington’s total levies to 50 per cent. Moscow said such measures amounted to illegal trade pressure.\nIndia has curtailed some oil purchases since then. Reliance, the owner of India’s largest private oil refiner, said late last month that it would \nstop using Russian crude\n following US sanctions on Russian oil producer Rosneft.\nBut “a complete halt to Russian imports is unlikely because discounted Russian barrels remain attractive”, said Sumit Ritolia, a lead India analyst with Kpler.\nThe Nayara Vadinar refinery, which is backed by Rosneft and located in Modi’s home state of Gujarat, is still buying Russian crude. The facility, India’s second-largest, is subject to UK and US sanctions, but has not been targeted directly by the US.\n“Even though strategically, the most important partner India has globally today would be the United States, the volatility of Trump’s White House gives an additional boost to the relationship with Russia,” said Ajay Bisaria, a former senior Indian diplomat who specialises in India-Russia relations. \nNarendra Modi, centre, and Vladimir Putin, left, speak with China’s President Xi Jinping in Tianjin in September. The trip was Modi’s first to China in seven years\n © Suo Takekuma/Reuters\nTies between Moscow and New Delhi date back decades. When India went to war with Pakistan in 1971 to support the creation of independent Bangladesh, the Soviet Union openly backed then-prime minister Indira Gandhi — even sending nuclear submarines to the Bay of Bengal — despite fierce opposition from the US, which sided with Islamabad. \nIn recent months, top Indian officials have made a flurry of trips to Russia to shore up ties in the face of Washington’s pressure. Modi and Putin \nheld an hour-long conversation\n in a limousine at a security forum in China in September. Later that month, New Delhi sent dozens of troops to the Zapad military exercises — drawing criticism from Brussels.\nIndia’s trade in goods with Russia was $68bn in the financial year ended in March, up from $13bn in 2022 but about half the figure of the comparable figure for $132bn with the US, New Delhi’s largest trading partner. About $50bn of the trade with Russia was oil imports.\nUS and EU currency restrictions have made it difficult for Russia to repatriate oil profits, resulting in \nbillions of rupees accumulating\n in India by early 2023. Moscow even drew up a list of electronics and other sensitive goods to exchange for the funds.\nIndia-Russia co-operation was “not confined to oil”, noted Chietigj Bajpaee, senior research fellow for South Asia at Chatham House.\nRussia has helped India build its civil nuclear capability and has a deal to build six nuclear power plants. The chief of Russian state-owned nuclear monopoly Rosatom is due to join Putin on the trip to discuss expanding civilian nuclear co-operation.\nIndia, world’s biggest weapons importer, has also long relied on Russian arms, even as it has been \nalso buying from the US\n, Israel and France. \nPeskov confirmed there would be discussions about India acquiring more Russian S-400 air defence systems, which New Delhi \nused during a brief conflict\n with Pakistan this year, and possibly Su-57 fighter jets.\nIndia has explored leasing a nuclear attack submarine, a prospect that has been delayed by the war in Ukraine.\nIndia Business Briefing\nThe Indian professional’s must-read on business and policy in the world’s fastest-growing big economy. Sign up for the newsletter \nhere\nThe two countries jointly produce BrahMos missile, which New Delhi fired in this year’s conflict with Islamabad, and which it \nis selling to the Philippines\n with Moscow’s approval.\nMilitary ties are set to deepen. Russia’s lower house of parliament on Tuesday ratified an agreement with India that would allow deployment of troops, warships and aircraft to each other’s territory. \nThe Russians “have been our friends through both fair and foul weather”, India’s defence secretary Rajesh Kumar Singh said last week. “We are not going to stop our defence co-operation with them anytime soon.”\nData visualisation by Haohsiang Ko in Hong Kong",
+          "from": "am_1st"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "BatchDedup": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code7": {
+      "main": [
+        [
+          {
+            "node": "BatchDedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "791e8e05-9abd-4d22-9422-0b0b85673024",
+  "meta": {
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "3SiLROoRm5IZMHoElwNFD",
+  "tags": []
+}

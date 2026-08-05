@@ -1,0 +1,774 @@
+{
+  "name": "upload_media_to_gettr_v.1.1",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "media_url"
+            },
+            {
+              "name": "user_id"
+            },
+            {
+              "name": "user_token"
+            },
+            {
+              "name": "download_cookie"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -144,
+        -48
+      ],
+      "id": "194656b1-b0ed-440f-b9e3-fc9420bf4197",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---------- Simple media detector ----------\nfor (const item of $input.all()) {\n  const url = item.json.media_url || '';\n  // Strip query‐string & fragment, then get the last path segment\n  const cleanPath = url.split(/[?#]/)[0];\n  // To handle URLs ending with '/', filter out empty segments before pop\n  const filenamePart = cleanPath.split('/').filter(Boolean).pop() || '';\n  const extMatch = filenamePart.match(/\\.([a-z0-9]+)$/i);\n  const ext = extMatch ? extMatch[1].toLowerCase() : '';\n\n  // Minimal MIME map\n  const mimeMap = {\n    jpg:  'image/jpeg',\n    jpeg: 'image/jpeg',\n    png:  'image/png',\n    gif:  'image/gif',\n    webp: 'image/webp',\n    svg:  'image/svg+xml',\n    bmp:  'image/bmp',\n    tiff: 'image/tiff',\n    avif: 'image/avif',\n    mp4:  'video/mp4',\n    mov:  'video/quicktime',\n    avi:  'video/x-msvideo',\n    mts:  'video/x-msvideo',\n    webm: 'video/webm',\n    mkv:  'video/x-matroska',\n    m4v:  'video/x-m4v',\n    ts:   'video/MP2T'\n  };\n\n  // Detect content-type; fallback rules keep it simple\n  let contentType = mimeMap[ext];\n  if (!contentType) {\n    // crude fallback: check for video clues in URL path or query string\n    const isVideo = /\\/video\\//.test(cleanPath) ||\n                    /[?&]mime_type=video/i.test(url) ||\n                    /\\.(mp4|mov|avi|webm|mkv|flv|wmv|3gp|m4v|ts|mts)(\\?|#|$)/i.test(url);\n\n    contentType = isVideo ? 'video/mp4' : 'application/octet-stream';\n  }\n\n  const mediaType = contentType.startsWith('video/') ? 'video' : 'image';\n  const tmpExt    = ext || (mediaType === 'video' ? 'mp4' : 'jpg');\n  const tmpName   = `tempname.${tmpExt}`;\n\n  // Write results back\n  item.json.detected_content_type = contentType;\n  item.json.media_type            = mediaType;\n  item.json.detected_filename     = tmpName;\n}\n\nreturn $input.all(); "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        -48
+      ],
+      "id": "fd0f32b8-8a7b-46de-b923-8d3cfc4c11dc",
+      "name": "detect_media_type"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  data_obj = JSON.parse(item.json.data)\n  item.json.gcp = data_obj?.gcs\n  item.json.notify_url = data_obj?.notify_url\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        -48
+      ],
+      "id": "5d4c0c0b-8e34-45f8-aa6b-80d699850a00",
+      "name": "parse_resp"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.gcp.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "x-goog-resumable",
+              "value": "start"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "content-type",
+              "value": "={{ $('detect_media_type').item.json.detected_content_type }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"unuse\": 0\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        992,
+        -48
+      ],
+      "id": "e1d83636-12de-4832-a5db-dfd1cac71590",
+      "name": "gcp_1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.media_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "cookie",
+              "value": "={{ $json.download_cookie}}"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "gzip, deflate, br"
+            },
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "Pragma",
+              "value": "no-cache"
+            },
+            {
+              "name": "Sec-Ch-Ua",
+              "value": "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\""
+            },
+            {
+              "name": "Sec-Ch-Ua-Mobile",
+              "value": "?0"
+            },
+            {
+              "name": "Sec-Ch-Ua-Platform",
+              "value": "macOS"
+            },
+            {
+              "name": "Sec-Fetch-Dest",
+              "value": "document"
+            },
+            {
+              "name": "Sec-Fetch-Mode",
+              "value": "navigate"
+            },
+            {
+              "name": "Sec-Fetch-Site",
+              "value": "none"
+            },
+            {
+              "name": "Sec-Fetch-User",
+              "value": "?1"
+            },
+            {
+              "name": "Upgrade-Insecure-Requests",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        688,
+        224
+      ],
+      "id": "bdb18dd6-6aa2-458d-96f5-e95252521241",
+      "name": "download_media",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.headers.location }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "content-type",
+              "value": "={{ $('detect_media_type').item.json.detected_content_type }}"
+            },
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2384,
+        -48
+      ],
+      "id": "074d95fe-d9bf-4a5d-a2fe-673214827030",
+      "name": "upload_media"
+    },
+    {
+      "parameters": {
+        "url": "https://upload.gettr.com/media/get_upload_channel?scene=getter",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "filename",
+              "value": "={{ $json.detected_filename }}"
+            },
+            {
+              "name": "authorization",
+              "value": "={{ $json.user_token }}"
+            },
+            {
+              "name": "userid",
+              "value": "={{ $json.user_id }}"
+            },
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        544,
+        -48
+      ],
+      "id": "acb3a049-c02b-4e22-8eb2-e3bcf2ec46f4",
+      "name": "get_media_channel"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2080,
+        -48
+      ],
+      "id": "20a20ade-9f57-44d0-8eff-2f7419d11ca4",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {      \n  item.json.media_info = JSON.parse(item.json.data);  \n  item.json.media_info.im_width = $('Merge').first().json.width;\n  item.json.media_info.im_height = $('Merge').first().json.height;\n  delete item.json.data;\n}\n\nreturn $input.all(); "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        -48
+      ],
+      "id": "d04df532-66d4-4647-bf2b-75b2085fc8a7",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "url": "=https://upload.gettr.com/{{ $('parse_resp').item.json.notify_url }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "uploadedurl",
+              "value": "={{ $('gcp_1').item.json.headers.location.split('?')[0] }}"
+            },
+            {
+              "name": "result",
+              "value": "ok"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "authorization",
+              "value": "={{ $('detect_media_type').item.json.user_token }}"
+            },
+            {
+              "name": "origin",
+              "value": "https://gettr.com"
+            },
+            {
+              "name": "userid",
+              "value": "={{ $('detect_media_type').item.json.user_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2720,
+        -48
+      ],
+      "id": "2e1bfa04-b870-44eb-ac40-4f1825969a05",
+      "name": "send_notification"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n-svr.gettr.fyi:7771/api/v1/image/size/by-url",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "9277311724445fa26f0172a701150da4743bf4b8b0257cf33a39a4c6445204a4"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.media_url }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        464
+      ],
+      "id": "e7e9c26a-37c9-49c6-b8f4-93a03e4ad864",
+      "name": "HTTP Request",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c9025655-8021-4a0b-b724-aa039018b7be",
+              "leftValue": "={{ $json.media_type }}",
+              "rightValue": "image",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        608,
+        512
+      ],
+      "id": "561cf89b-cb4e-41e8-9be7-a45e5299f363",
+      "name": "If image"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nreturn [{\n  json: {width: null, height: null, media_type: null}\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        672
+      ],
+      "id": "be986ce9-a44c-4ba3-b1da-e7eccb60cf3d",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items to process the HTTP response.\nfor (const item of $input.all()) {\n  // Check for a successful status code and the existence of a body.\n  if (item.json.statusCode === 200 && item.json.body) {\n    // Use destructuring to separate the body from the rest of the properties.\n    const { body, ...rest } = item.json;\n    // Create a new item.json by merging the rest of the properties with the content of the body.\n    item.json = { ...rest, ...body };\n  } else {\n    // If the request was not successful or the body is empty, create a consistent structure.\n    item.json.media_type = null;\n    item.json.width = null;\n    item.json.height = null;\n    // And ensure the body property is removed.\n    delete item.json.body;\n  }\n}\n\n// Return the modified items.\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        336
+      ],
+      "id": "053c8681-79c9-4e60-ac7c-4325598ea877",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "53b8a2b1-b49e-47ae-90ba-459ded1c3828",
+              "leftValue": "={{ $json?.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        224
+      ],
+      "id": "ad506d37-51f7-4c72-a19f-90a09d8dfb81",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n-svr.gettr.fyi:7771/api/v1/media/download",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "9277311724445fa26f0172a701150da4743bf4b8b0257cf33a39a4c6445204a4"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('detect_media_type').item.json.media_url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1088,
+        112
+      ],
+      "id": "0106aa77-db5e-443d-b4ab-1c263d59974f",
+      "name": "HTTP Request1",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nreturn [{}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        512
+      ],
+      "id": "dbf3f83b-8407-4eb2-bcc7-ae3028c04f4f",
+      "name": "Return None"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "media_url": "https://static-assets-1.truthsocial.com/tmtg:prime-ts-assets/media_attachments/files/115/868/292/583/130/549/original/f963b6c9c51c786f.jpg",
+          "user_id": "gettrromance",
+          "user_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJnZXR0cnJvbWFuY2UiLCJ1c2VybmFtZSI6InRydW1wdHJ1dGhwb3N0cyIsImxldmVsIjoxLCJndmVyIjoiMkU2NTkxOEYiLCJjdmVyIjoiOEYxWEpBIiwiaWF0IjoxNzUzMDE0Mzk5LCJleHAiOjIwNjgzNzQzOTl9.EpXQv9zTn5AXbNJ949gWCcI6QrITElCQxGv9F8T7hSI",
+          "download_cookie": null
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "detect_media_type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "detect_media_type": {
+      "main": [
+        [
+          {
+            "node": "get_media_channel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "download_media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_resp": {
+      "main": [
+        [
+          {
+            "node": "gcp_1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gcp_1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "download_media": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "upload_media": {
+      "main": [
+        [
+          {
+            "node": "send_notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_media_channel": {
+      "main": [
+        [
+          {
+            "node": "parse_resp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "upload_media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_notification": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If image": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return None",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Return None": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c6fc1a82-0c4f-46a1-8581-e83ef92b33db",
+  "meta": {
+    "instanceId": "0697943a22d60cda7d4b98cdb9636fde86bfc54c99d403ba28101bd9f39c23b8"
+  },
+  "id": "QBAZqoq3zMEwJzPc",
+  "tags": [
+    {
+      "updatedAt": "2025-07-05T03:21:24.203Z",
+      "createdAt": "2025-07-05T03:21:24.203Z",
+      "id": "KPWthcboPhh3rAk4",
+      "name": "PRODUCTION"
+    }
+  ]
+}

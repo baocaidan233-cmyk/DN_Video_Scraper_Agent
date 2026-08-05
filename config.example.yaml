@@ -1,0 +1,337 @@
+# ---------------------------------------------------------------------------
+# config.example.yaml — template for config.yaml
+#
+#   cp config.example.yaml config.yaml
+#   # then fill in every REPLACE_ME value
+#
+# config.yaml holds live credentials and is listed in .gitignore. NEVER commit
+# it. Non-secret tuning values below are the real production values and are safe
+# defaults to start from.
+#
+# Note: thresholds, intervals, autopilot and pause state are OVERRIDDEN at
+# startup by data/schedule.json (DailyNews) and data/schedule_ef.json
+# (EpicFury) once those files exist. The values here only apply on first run.
+# ---------------------------------------------------------------------------
+
+app:
+  log_level: INFO              # DEBUG is very verbose — it logs full LLM prompts
+  timezone: UTC
+
+notion:
+  api_key: "REPLACE_ME"                    # Notion integration token (ntn_...)
+  rss_database_id: "REPLACE_ME"            # RSS sources DB (in_use, property_rss, property_cookie)
+
+rss:
+  filter_feed_hours: 2
+  max_feed_items: 10000
+  max_feed_per_source: 150
+  concurrency: 10
+  fetch_timeout_s: 30
+  # Feed URLs are loaded from the Notion database (in_use == true), not configured here
+
+redis:
+  url: "REPLACE_ME"            # e.g. rediss://default:<password>@<host>.upstash.io:6379
+  url_hash_key_prefix: "newsrooms:dailynews_v2_test:title_hash:"
+  url_hash_ttl_s: 10800        # 3h. INVARIANT: must be >= rss.filter_feed_hours * 3600 (currently 2h).
+                               # The margin is deliberate: this TTL is counted from FETCH time, but the
+                               # feed window is measured from the item's PUBLISHED time, and feeds often
+                               # surface items later than they claim. If the key expires while the item
+                               # is still inside the window, it is re-ingested every cycle forever.
+  post_hash_key_prefix: "newsroom:dailynews_v2_test:post:"
+  post_hash_ttl_s: 864000      # 10 days. Also used for the article-ID dedup key
+                               # ({post_hash_key_prefix}article:{article_id}).
+  review_pending_prefix: "review_test:pending:"
+  review_queue_key: "review_test:queue"
+  publish_queue_key: "publish_test:queue"
+
+openai:
+  api_key: "REPLACE_ME"        # sk-proj-...
+  embedding_model: "text-embedding-3-small"
+  scoring_model: "gpt-4o-mini"
+  post_gen_model: "gpt-4o-mini"
+  embedding_batch_size: 100
+  max_retries: 3
+  retry_delay_s: 2
+
+qdrant:
+  url: "REPLACE_ME"            # e.g. https://<cluster-id>.<region>.gcp.cloud.qdrant.io
+  api_key: "REPLACE_ME"
+  collection: "dailynews_embeddings"
+  vector_size: 1536             # text-embedding-3-small output size
+  within_batch_threshold: 0.70
+  cross_batch_threshold: 0.80
+  cross_batch_hours: 48
+
+claude:
+  api_key: "REPLACE_ME"        # sk-ant-api03-...
+  max_tokens: 1500  # must cover a full batch of JSON scores+comments; too low → truncated JSON → _parse_scores zeroes the whole batch
+  batch_size: 5     # smaller batch = less output per call, lower truncation risk (also used by EpicFury via config.claude.model_copy)
+  filter_score_threshold: 6.0  # DailyNews: articles scoring below this are dropped (0-10 scale)
+
+telegram:
+  enabled: false                 # Telegram review is retired; NotionReviewAgent is the active mechanism
+  bot_token: ""
+  editor_chat_id: 0              # group or channel chat ID
+  card_queue_maxsize: 500
+
+notion_review:
+  api_key: "REPLACE_ME"                    # can reuse the notion.api_key integration token
+  review_database_id: "REPLACE_ME"         # 32-char DB ID; run setup_notion_review_db.py after creating it
+  poll_interval_s: 30
+
+gettr:
+  api_url: "https://gettr.com/api/u/post"
+  user_id: "REPLACE_ME"        # DailyNews Gettr account ID or handle
+  user_token: "REPLACE_ME"     # DailyNews Gettr JWT
+
+# DailyNews A/B comparison account. When set, every story DailyNews publishes to
+# `gettr` above is ALSO posted here using the editor-revised variant, so the two
+# editorial treatments can be compared side by side. Omit the whole block to disable.
+# Adding it for the first time requires a restart; edits to it hot-reload.
+# gettr_test:
+#   api_url: "https://gettr.com/api/u/post"
+#   user_id: "REPLACE_ME"      # test Gettr account ID or handle
+#   user_token: "REPLACE_ME"   # test Gettr JWT
+
+# Editor review branch — DailyNews only. Runs a 3-prompt chain (intake triage →
+# CCP exposure → ChinaX style) over each scored article, between claude_score and
+# post_gen, producing a revised article. post_gen then makes a second post from it
+# which goes to `gettr_test`. Never affects the standard post or the live account.
+editor_review:
+  enabled: false               # master switch for the branch
+  triage_prompt: "prompts/ai_editor_intake_triage_prompt.md"
+  ccp_prompt: "prompts/ai_editor_ccp_exposure_system_prompt.md"
+  style_prompt: "prompts/unveiled_chinax_style_prompt.md"
+  max_per_run: 0               # 0 = every qualifying article; N = top N by score (cost cap)
+  max_tokens: 2000
+  # model: ""                  # optional override; default = claude.scoring_model / openai.post_gen_model
+
+gemma:
+  api_key: "REPLACE_ME"        # Google AI Studio API key (https://aistudio.google.com/apikey)
+  model: gemma-4-31b-it        # Gemma 4 31B model on Google AI Studio (bare name, no "models/" prefix)
+  max_tokens: 4096
+  enabled: true                # Set false to skip verification and always pass through
+
+image_gen:
+  enabled: false               # Set to true to re-enable AI image generation via Pollinations
+  pollinations_api_key: ""     # Free key from https://auth.pollinations.ai — required since Mar 2026
+
+# AI short-video fallback for DailyNews posts with no usable image (no image /
+# image too small / image is just a source logo / all media uploads failed).
+# Instead of dropping the article, render a ~25s narrated motion-news MP4.
+# Requires ffmpeg + edge-tts on the host — see video/UPSTREAM.md.
+#
+# IMPORTANT: `enabled` and `max_24h` here are FIRST-BOOT DEFAULTS ONLY. Once
+# data/schedule.json exists the dashboard values in it win — same as every other
+# tunable. Flip the switch and set the cap from the dashboard, not from here.
+video_gen:
+  enabled: false               # dashboard switch default
+  max_24h: 0                   # rolling 24h cap, per pipeline. 0 = feature off
+  timeout_s: 480               # kill a render past this (measured: ~91s typical)
+  width: 960                   # 4:3
+  height: 720
+  brief_model: ""              # LLM for the headline/media-query brief; "" = client default
+
+metadata_api:
+  urlmeta_api_key: "REPLACE_ME"     # urlmeta.org key — HTTP Basic auth (base64 of "apikey:")
+  youtube_api_key: "REPLACE_ME"     # YouTube Data API v3 key
+  self_hosted_url: "http://n8n-svr.gettr.fyi:7771/api/v1/website/metadata"
+  self_hosted_api_key: "REPLACE_ME"
+  no_preview_domains: []     # domains to skip preview for (mirrors n8n Redis cfg_domains_wo_preview)
+
+gcp:
+  resumable_upload_timeout_s: 60
+  download_timeout_s: 30
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+dashboard:
+  enabled: true
+  port: 8080
+  port2: 8081          # Epic Fury dashboard port
+  password_hash: "REPLACE_ME"   # Generate with: python3 -m dashboard.setup_password
+  session_secret: ""            # Auto-generated ephemerally if empty
+  alerts:
+    smtp_host: ""
+    smtp_port: 587
+    smtp_username: ""
+    smtp_password: ""
+    smtp_from_addr: ""
+    smtp_to_addrs: []
+    telegram_alert_chat_id: null
+
+# Credentials for the embedding-based topical dedup checker (services/notion_topical_dedup.py).
+# article_database_id is the human-editor "daily_news" board it compares against and writes
+# Duplicate/Notes back to — the integration needs update-content capability, not just read.
+notion_dedup:
+  api_key: "REPLACE_ME"
+  article_database_id: "REPLACE_ME"
+  similarity_threshold: 0.80
+  recent_lookback_hours: 24
+  enforce_recent_skip: false   # true = actually skip publishing on a match, not just log
+  gettr_handle: "dailynews"
+  gettr_crosscheck_interval_minutes: 15
+
+# UNUSED — leftover from the removed ingestion-time "Stage 3" Notion dedup.
+# No code path reads this any more; kept only so old config files still load.
+qdrant_notion:
+  url: ""
+  api_key: ""
+  collection: "dailynews_review_embeddings"
+  vector_size: 1536
+  within_batch_threshold: 0.70
+  cross_batch_threshold: 0.80
+  cross_batch_hours: 24
+
+qdrant_epicfury:
+  url: "REPLACE_ME"            # may be the same cluster as qdrant.url, different collection
+  api_key: "REPLACE_ME"
+  collection: "epicfury_embeddings"
+  vector_size: 1536
+  within_batch_threshold: 0.70
+  cross_batch_threshold: 0.75  # Tighter than DailyNews (0.80): military news often reported by multiple sources with slightly different wording
+  cross_batch_hours: 48
+
+epicfury:
+  sources_md_path: "sources/epicfury_sources.md"
+  filter_feed_hours: 2
+  max_articles_per_website: 15
+  filter_score_threshold: 6.0  # EpicFury: articles scoring below this are dropped (0-10 scale)
+  keywords:
+    - iran
+    - iranian
+    - irgc
+    - epic fury
+    - operation epic fury
+    - israel
+    - israeli
+    - idf
+    - netanyahu
+    - centcom
+    - u.s. military
+    - us military
+    - pentagon
+    - airstrike
+    - strike
+    - missile
+    - f-35
+    - b-2
+    - carrier
+    - war
+    - offensive
+    - military operation
+    - air campaign
+    - nuclear
+    - natanz
+    - fordow
+    - khamenei
+    - tehran
+    - middle east
+    - persian gulf
+    - hormuz
+    - strait of hormuz
+    - gulf of oman
+    - tanker
+    - oil tanker
+    - maritime
+    - naval
+    - warship
+    - blockade
+    - naval blockade
+    - chokepoint
+    - shipping lane
+    - oil shipment
+    - freedom of navigation
+    - irgc navy
+    - naval exercise
+    - ship seizure
+    - vessel seizure
+    - drone
+    - ceasefire
+    - cease-fire
+    - negotiations
+    - sanctions
+    - hezbollah
+    - hamas
+    - houthi
+    - houthis
+    - lebanon
+    - gaza
+    - west bank
+    - yemen
+    - baghdad
+    - beirut
+    - tel aviv
+    - jerusalem
+    - proxy
+  x:
+    tweets_per_account: 30
+    # Only needed for the cookie-based X scraper fallback. Prefer twitterapi /
+    # socialdata below and leave this list empty if you can.
+    credentials: []
+      # - username: "REPLACE_ME"
+      #   password: "REPLACE_ME"
+      #   email: "REPLACE_ME"
+      #   cookies_file: "data/epicfury_x_cookies_1.txt"
+  twitterapi:
+    api_key: "REPLACE_ME"      # twitterapi.io key (empty = skip to Syndication API)
+    base_url: "https://api.twitterapi.io"
+    tweets_per_account: 20
+  socialdata:
+    api_key: "REPLACE_ME"      # socialdata.tools key (empty = skip to Syndication API)
+    base_url: "https://api.socialdata.tools"
+    tweets_per_account: 20
+  x_scraper: "twitterapi"               # "twitterapi" | "socialdata" (overridden live from dashboard)
+  # Redis key namespacing — change these only if you need a different namespace
+  redis_url_hash_prefix: "epicfury:title_hash:"
+  redis_url_hash_ttl_s: 10800   # 3h. Same invariant as redis.url_hash_ttl_s:
+                                # must be >= epicfury.filter_feed_hours * 3600 (currently 2h).
+  redis_review_pending_prefix: "epicfury:review:pending:"
+  redis_review_queue_key: "epicfury:review:queue"
+  redis_publish_queue_key: "epicfury:publish:queue"
+  redis_post_hash_prefix: "epicfury:post:"
+  redis_post_hash_ttl_s: 864000
+  redis_tg_msg_prefix: "ef:tg:msg:"
+  # AI video fallback for EpicFury. Also the default inherited by every
+  # config-driven channel (ChannelConfig.source is an EpicFuryConfig), and each
+  # channel may override it under its own `source:`. Off by default — the
+  # feature is being proven on DailyNews first.
+  video_gen:
+    enabled: false
+    max_24h: 0
+
+gettr_epicfury:
+  api_url: "https://gettr.com/api/u/post"
+  user_id: "REPLACE_ME"        # Epic Fury Gettr account ID
+  user_token: "REPLACE_ME"     # Epic Fury Gettr JWT
+
+telegram_epicfury:
+  enabled: false                 # Telegram review is retired
+  bot_token: ""
+  editor_chat_id: 0              # Epic Fury review group chat ID
+  card_queue_maxsize: 500
+
+notion_review_epicfury:
+  api_key: "REPLACE_ME"                    # can reuse the notion.api_key integration token
+  review_database_id: "REPLACE_ME"         # 32-char DB ID; run setup_notion_review_db.py --section notion_review_epicfury
+  poll_interval_s: 30
+
+# ---------------------------------------------------------------------------
+# Optional: extra EF-style channels, added with no code changes.
+# Each needs a unique slug and dashboard_port. See templates/channel/ and
+# DESIGN.md §19 for the full field reference.
+# ---------------------------------------------------------------------------
+# channels:
+#   - slug: mychannel
+#     title: "My Channel"
+#     dashboard_port: 8082
+#     enabled: true
+#     gettr:
+#       api_url: "https://gettr.com/api/u/post"
+#       user_id: "REPLACE_ME"
+#       user_token: "REPLACE_ME"
+#     notion_review:
+#       api_key: "REPLACE_ME"
+#       review_database_id: "REPLACE_ME"
+#     source:
+#       sources_md_path: "sources/mychannel_sources.md"
+#       keywords: [example, keyword]
