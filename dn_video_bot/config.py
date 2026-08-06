@@ -53,9 +53,11 @@ class DnVideoBotConfig(BaseModel):
 
     use_test_account: bool = True
 
-    # Caption is a text-only rewrite of the tweet's own text — no video frame
-    # analysis, no transcription (dropped per updated requirement 2026-07-30).
+    # Caption is a rewrite of the tweet's own text PLUS a transcript of the
+    # video's audio (see transcriber.py, added back 2026-08-06 — the transcript
+    # regularly carries far more detail than the tweet text alone summarized).
     caption_model: str = "gpt-4o-mini"
+    transcribe_model: str = "gpt-4o-mini-transcribe"
 
 
 class Resources(BaseModel):

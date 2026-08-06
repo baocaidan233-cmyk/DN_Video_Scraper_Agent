@@ -25,6 +25,8 @@ from .content_dedup import ContentDedup
 from .dedup import UrlDedup
 from .notion_source import NotionRow, NotionSource
 from .publisher import Publisher
+from .transcriber import Transcriber
+
 from .tweet_fetcher import TweetFetcher, TweetFetchError
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ class Scheduler:
         content_dedup: ContentDedup,
         tweet_fetcher: TweetFetcher,
         caption_writer: CaptionWriter,
+        transcriber: Transcriber,
         publisher: Publisher,
         redis: RedisClient,
         tick_interval_minutes: int,
@@ -56,6 +59,7 @@ class Scheduler:
         self._content_dedup = content_dedup
         self._tweet_fetcher = tweet_fetcher
         self._caption_writer = caption_writer
+        self._transcriber = transcriber
         self._publisher = publisher
         self._redis = redis
         self._tick_interval_s = tick_interval_minutes * 60
@@ -156,6 +160,7 @@ class Scheduler:
             # no AI rewrite, no JUST IN/BREAKING prefix added on top of it.
             caption = row.post_content.strip()
         else:
+            transcript = await self._transcriber.transcribe(tweet.audio_source_url)
             caption = await self._caption_writer.write(
                 tweet_text=tweet.text,
                 tweet_created_at=tweet.created_at,
@@ -164,6 +169,7 @@ class Scheduler:
                 account_handle=tweet.account_handle,
                 account_label=tweet.account_label,
                 mentions=tweet.mentions,
+                transcript=transcript,
             )
             if not caption.strip() or not caption.strip().split(" - ", 1)[-1].strip():
                 logger.warning("Skipping row %s — caption writer returned an empty body", row.page_id)

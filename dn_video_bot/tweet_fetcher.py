@@ -41,11 +41,35 @@ def parse_tweet_id(url: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _smallest_mp4_variant(media_details: list[dict]) -> str | None:
+    """Lowest-bitrate video/mp4 variant across all video media items — used for audio
+    transcription only (audio content is identical across variants; smaller download,
+    stays well under the transcription API's upload size limit). Separate from the
+    highest-bitrate pick `_extract_media_from_extended_entities` returns for publishing."""
+    best_url: str | None = None
+    best_bitrate: float | None = None
+    for media in media_details or []:
+        if media.get("type") not in ("video", "animated_gif"):
+            continue
+        variants = (media.get("video_info") or {}).get("variants", [])
+        for v in variants:
+            url = v.get("url", "")
+            is_mp4 = "video/mp4" in v.get("content_type", "") or url.split("?")[0].lower().endswith(".mp4")
+            if not is_mp4:
+                continue
+            bitrate = v.get("bitrate") or 0
+            if best_bitrate is None or bitrate < best_bitrate:
+                best_bitrate = bitrate
+                best_url = url
+    return best_url
+
+
 class TweetData:
     def __init__(
         self, text: str, created_at: datetime, video_url: str | None,
         account_name: str, account_handle: str, account_label: str,
         mentions: list[tuple[str, str]] | None = None,
+        audio_source_url: str | None = None,
     ) -> None:
         self.text = text
         self.created_at = created_at
@@ -57,6 +81,9 @@ class TweetData:
         # e.g. [("Doranimated", "Mike")] — comes free from the same tweet-result response, no extra
         # API call. The posting account itself is filtered out.
         self.mentions = mentions or []
+        # Lowest-bitrate mp4 URL, for transcription only — smaller/faster than `video_url`,
+        # which stays highest-bitrate for the actual Gettr publish.
+        self.audio_source_url = audio_source_url
 
     @property
     def hours_old(self) -> float:
@@ -90,8 +117,9 @@ class TweetFetcher:
         if not text:
             raise TweetFetchError(f"Tweet {tweet_id}: empty/missing text in response — {data}")
 
+        media_details = data.get("mediaDetails") or []
         _url_to_image, video_url, _all_media_urls, has_video = _extract_media_from_extended_entities(
-            {"media": data.get("mediaDetails") or []}
+            {"media": media_details}
         )
         if not has_video:
             raise TweetFetchError(f"Tweet {tweet_id} has no video attached")
@@ -116,4 +144,5 @@ class TweetFetcher:
             account_handle=user.get("screen_name", ""),
             account_label=(user.get("highlighted_label") or {}).get("description", ""),
             mentions=mentions,
+            audio_source_url=_smallest_mp4_variant(media_details) or video_url,
         )

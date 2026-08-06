@@ -1,5 +1,5 @@
 Posted by: {account_desc}
 
 Original tweet text: {tweet_text}
-{mentions_block}
+{mentions_block}{transcript_block}
 Rewrite it now, following the system instructions.

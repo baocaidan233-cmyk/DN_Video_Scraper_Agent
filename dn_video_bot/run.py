@@ -25,6 +25,8 @@ from .dedup import UrlDedup
 from .notion_source import NotionSource
 from .publisher import Publisher
 from .scheduler import Scheduler
+from .transcriber import Transcriber
+
 from .tweet_fetcher import TweetFetcher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -59,6 +61,7 @@ async def main() -> None:
         url_dedup = UrlDedup(redis, bot.redis_url_hash_prefix, ttl_hours=bot.url_dedup_ttl_hours)
         tweet_fetcher = TweetFetcher(session)
         caption_writer = CaptionWriter(resources.openai.api_key, bot.caption_model, bot.breaking_window_hours)
+        transcriber = Transcriber(resources.openai.api_key, bot.transcribe_model, session)
         gcp_client = GcpClient(resources.gettr, resources.gcp, session)
         gettr_client = GettrClient(resources.gettr, session)
         publisher = Publisher(gcp_client, gettr_client)
@@ -69,6 +72,7 @@ async def main() -> None:
             content_dedup=content_dedup,
             tweet_fetcher=tweet_fetcher,
             caption_writer=caption_writer,
+            transcriber=transcriber,
             publisher=publisher,
             redis=redis,
             tick_interval_minutes=bot.tick_interval_minutes,

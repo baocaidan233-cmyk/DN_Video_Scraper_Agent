@@ -1,7 +1,8 @@
 """
-Writes the final Gettr caption as an edited/tightened rewrite of the tweet's
-own text (no video frame analysis, no transcription — dropped per updated
-requirement), then prepends "JUST IN - " or "BREAKING - ".
+Writes the final Gettr caption from the tweet's own text PLUS a transcript of
+the video's audio (see transcriber.py) — the transcript often carries far
+more detail (names, specific claims, numbers) than the tweet text alone
+summarized, then prepends "JUST IN - " or "BREAKING - ".
 
 BREAKING is used when the tweet is within `breaking_window_hours` AND the
 editor flagged Urgency (either tier) — i.e. we defer "is this actually big
@@ -37,6 +38,12 @@ def _mentions_block(mentions: list[tuple[str, str]]) -> str:
     )
 
 
+def _transcript_block(transcript: str) -> str:
+    if not transcript.strip():
+        return ""
+    return f"\nTranscript of the video's audio:\n{transcript.strip()}\n"
+
+
 class CaptionWriter:
     def __init__(self, openai_api_key: str, model: str, breaking_window_hours: int) -> None:
         self._client = AsyncOpenAI(api_key=openai_api_key)
@@ -59,6 +66,7 @@ class CaptionWriter:
         account_handle: str,
         account_label: str,
         mentions: list[tuple[str, str]] | None = None,
+        transcript: str = "",
     ) -> str:
         account_desc = account_name or f"@{account_handle}"
         if account_label:
@@ -67,6 +75,7 @@ class CaptionWriter:
             tweet_text=tweet_text or "(no text)",
             account_desc=account_desc,
             mentions_block=_mentions_block(mentions or []),
+            transcript_block=_transcript_block(transcript),
         )
 
         response = await self._client.chat.completions.create(
