@@ -14,7 +14,8 @@ from __future__ import annotations
 import logging
 
 import aiohttp
-from openai import AsyncOpenAI
+
+from .openai_failover import FailoverOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,8 @@ _MAX_BYTES = 20 * 1024 * 1024  # stay well under the API's 25MB cap
 
 
 class Transcriber:
-    def __init__(self, openai_api_key: str, model: str, session: aiohttp.ClientSession) -> None:
-        self._client = AsyncOpenAI(api_key=openai_api_key)
+    def __init__(self, openai_api_keys: list[str], model: str, session: aiohttp.ClientSession) -> None:
+        self._client = FailoverOpenAI(openai_api_keys)
         self._model = model
         self._session = session
 
@@ -55,7 +56,7 @@ class Transcriber:
             return ""
 
         try:
-            resp = await self._client.audio.transcriptions.create(
+            resp = await self._client.transcription(
                 model=self._model,
                 file=("clip.mp4", data, "video/mp4"),
             )

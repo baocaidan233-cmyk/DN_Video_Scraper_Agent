@@ -59,6 +59,13 @@ class DnVideoBotConfig(BaseModel):
     caption_model: str = "gpt-4o-mini"
     transcribe_model: str = "gpt-4o-mini-transcribe"
 
+    # Failover: tried in order — if the primary key returns an
+    # insufficient_quota/credit_balance_exhausted error, permanently switch to
+    # the next one for the rest of this process's lifetime (see
+    # openai_failover.py). Added 2026-08-07 after the primary key ran out of
+    # credits mid-production and every tick failed until someone noticed.
+    openai_fallback_api_key: str = ""
+
 
 class Resources(BaseModel):
     """Bundle of everything run.py needs to construct the bot's clients."""

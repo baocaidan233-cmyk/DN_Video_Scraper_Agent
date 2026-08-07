@@ -60,8 +60,9 @@ async def main() -> None:
         )
         url_dedup = UrlDedup(redis, bot.redis_url_hash_prefix, ttl_hours=bot.url_dedup_ttl_hours)
         tweet_fetcher = TweetFetcher(session)
-        caption_writer = CaptionWriter(resources.openai.api_key, bot.caption_model, bot.breaking_window_hours)
-        transcriber = Transcriber(resources.openai.api_key, bot.transcribe_model, session)
+        openai_keys = [resources.openai.api_key, bot.openai_fallback_api_key]
+        caption_writer = CaptionWriter(openai_keys, bot.caption_model, bot.breaking_window_hours)
+        transcriber = Transcriber(openai_keys, bot.transcribe_model, session)
         gcp_client = GcpClient(resources.gettr, resources.gcp, session)
         gettr_client = GettrClient(resources.gettr, session)
         publisher = Publisher(gcp_client, gettr_client)

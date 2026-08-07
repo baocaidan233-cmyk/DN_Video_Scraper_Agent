@@ -15,7 +15,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from openai import AsyncOpenAI
+from .openai_failover import FailoverOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,8 @@ def _transcript_block(transcript: str) -> str:
 
 
 class CaptionWriter:
-    def __init__(self, openai_api_key: str, model: str, breaking_window_hours: int) -> None:
-        self._client = AsyncOpenAI(api_key=openai_api_key)
+    def __init__(self, openai_api_keys: list[str], model: str, breaking_window_hours: int) -> None:
+        self._client = FailoverOpenAI(openai_api_keys)
         self._model = model
         self._breaking_window_hours = breaking_window_hours
         self._system_prompt = _load_prompt("dn_video_caption_system.txt")
@@ -78,7 +78,7 @@ class CaptionWriter:
             transcript_block=_transcript_block(transcript),
         )
 
-        response = await self._client.chat.completions.create(
+        response = await self._client.chat_completion(
             model=self._model,
             max_tokens=200,
             temperature=0.4,
