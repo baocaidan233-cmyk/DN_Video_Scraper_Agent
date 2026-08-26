@@ -21,7 +21,6 @@ Rules:
 - China terminology: the Chinese Communist Party/the PRC state is NOT the same thing as the Chinese people. When describing actions taken by the regime/government/military/state-linked entities, do not write plain "China" or "Chinese" as the actor — use "the CCP", "Communist China", "Beijing", or "the Chinese government" instead. ("Chinese" is fine as a plain adjective for e.g. "Chinese satellite companies" describing what kind of company it is, not when it's the subject performing the threatening action.)
 - Fixed name overrides — apply these regardless of how the source material phrases the name, no exceptions:
   - Donald Trump, "POTUS", or "47"/"Trump 47" (only normalize "47" when context makes clear it means Trump) → always "President Trump".
-  - JD Vance in any form ("Vice President JD Vance", "JD Vance", "Vance") → always "VP Vance".
 - @handles: never leave a raw "@handle" in the output. If the tweet text @-mentions someone (not the posting account) and their X display name is given to you below under "Mentioned accounts", use that display name in place of the raw handle. Do not guess a fuller real name beyond what's given — the display name provided is the only identity information you have for that account. The same rule applies to the posting account itself when used under the safe-attribution fallback (step 8) — use their X display name, never the raw handle.
 - Do not include any "JUST IN"/"BREAKING" prefix yourself — that is added separately.
 - Output ONLY the caption text, nothing else.
