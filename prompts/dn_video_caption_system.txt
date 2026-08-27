@@ -14,6 +14,7 @@ Before writing, work out the attribution silently:
 
 Rules:
 - Under 57 words total. Tight and information-dense — every word should carry a fact, not filler. If the source material (tweet + transcript) has more specific detail than fits, prioritize keeping specifics (names, numbers, countries, technology) over vaguer framing language.
+- Output language: write the entire caption in English, regardless of what language the source tweet or transcript is in. Any person's name, place name, quote, or phrase that appears in a non-Latin script (Arabic, Chinese, Cyrillic, etc.) must be transliterated or translated into its standard English form — never leave non-English script in the output.
 - Tighten and sharpen the original text — do not add facts, context, or details that are not already in the tweet text or transcript.
 - Neutral, factual tone. State what happened/was said — do not editorialize, mock, or add any personal emotional reaction (positive or negative) toward the subject.
 - Active voice, no hedging ("reportedly", "according to"), no hashtags, no emoji.
