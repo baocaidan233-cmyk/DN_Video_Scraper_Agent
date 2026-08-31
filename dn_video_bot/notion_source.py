@@ -61,8 +61,8 @@ class NotionSource:
         """status=<status_value> AND URL not empty AND send_status=false AND
         created within the last lookback_hours, oldest first, AND either:
         Duplicate is empty, OR Duplicate was set but the editor has since
-        raised Urgency to 🔥🔥🔥 — an explicit override to publish anyway
-        (see scheduler._process's was_duplicate handling)."""
+        raised Urgency to 🔥 or 🔥🔥🔥 — an explicit override to publish
+        anyway (see scheduler._process's was_duplicate handling)."""
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=self._lookback_hours)).isoformat()
         base_filters = [
             {"property": "status", "status": {"equals": self._status_value}},
@@ -78,7 +78,7 @@ class NotionSource:
                     ]},
                     {"and": base_filters + [
                         {"property": "Duplicate", "select": {"equals": "Duplicate"}},
-                        {"property": "Urgency", "select": {"equals": "🔥🔥🔥"}},
+                        {"property": "Urgency", "select": {"is_not_empty": True}},
                     ]},
                 ]
             },

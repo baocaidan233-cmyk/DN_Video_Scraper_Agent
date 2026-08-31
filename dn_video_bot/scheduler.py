@@ -92,8 +92,8 @@ class Scheduler:
         candidates: list[NotionRow] = []
         for row in rows:
             # A prior Duplicate drop already marked this URL "seen" — an
-            # editor override (Duplicate + 🔥🔥🔥) must still get through.
-            if row.was_duplicate and row.priority == 2:
+            # editor override (Duplicate + 🔥 or 🔥🔥🔥) must still get through.
+            if row.was_duplicate and row.priority >= 1:
                 candidates.append(row)
                 continue
             if await self._url_dedup.already_seen(row.url):
@@ -181,11 +181,11 @@ class Scheduler:
                 await self._url_dedup.mark_seen(row.url)
                 return False
 
-        override_duplicate = row.was_duplicate and row.priority == 2
+        override_duplicate = row.was_duplicate and row.priority >= 1
         if override_duplicate:
             logger.info(
-                "Row %s previously marked Duplicate but editor raised Urgency to 🔥🔥🔥 — overriding, publishing anyway",
-                row.page_id,
+                "Row %s previously marked Duplicate but editor raised Urgency to %s — overriding, publishing anyway",
+                row.page_id, row.urgency,
             )
         elif await self._content_dedup.is_duplicate(caption):
             logger.info("Row %s dropped — matches a recently published caption", row.page_id)
