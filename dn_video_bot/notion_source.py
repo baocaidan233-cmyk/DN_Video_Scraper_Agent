@@ -3,7 +3,7 @@ Reads eligible rows from the shared daily_news Notion database and writes
 results back. Shares the database with the human editor's own workflow and
 the legacy n8n job — only ever touches rows matching our own filter
 (status=<status_value> AND URL not empty AND send_status=false), and only
-ever writes to URL/send_status/post_content/Notes.
+ever writes to post_content/Notes/Duplicate.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ NOTION_VERSION = "2022-06-28"
 class NotionRow:
     def __init__(
         self, page_id: str, url: str, title: str, urgency: str, created_time: str,
-        post_content: str = "",
+        post_content: str = "", was_duplicate: bool = False,
     ) -> None:
         self.page_id = page_id
         self.url = url
@@ -31,6 +31,7 @@ class NotionRow:
         self.urgency = urgency  # "" | "🔥" | "🔥🔥🔥"
         self.created_time = created_time
         self.post_content = post_content  # editor-authored caption, if any — see scheduler._process
+        self.was_duplicate = was_duplicate  # editor override: see scheduler._process
 
     @property
     def priority(self) -> int:
@@ -57,18 +58,28 @@ class NotionSource:
         self._lookback_hours = lookback_hours
 
     async def fetch_eligible_rows(self) -> list[NotionRow]:
-        """status=<status_value> AND URL not empty AND send_status=false
-        AND Duplicate is empty AND created within the last lookback_hours,
-        oldest first."""
+        """status=<status_value> AND URL not empty AND send_status=false AND
+        created within the last lookback_hours, oldest first, AND either:
+        Duplicate is empty, OR Duplicate was set but the editor has since
+        raised Urgency to 🔥🔥🔥 — an explicit override to publish anyway
+        (see scheduler._process's was_duplicate handling)."""
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=self._lookback_hours)).isoformat()
+        base_filters = [
+            {"property": "status", "status": {"equals": self._status_value}},
+            {"property": "URL", "url": {"is_not_empty": True}},
+            {"property": "send_status", "checkbox": {"equals": False}},
+            {"property": "Created time", "created_time": {"on_or_after": cutoff}},
+        ]
         body = {
             "filter": {
-                "and": [
-                    {"property": "status", "status": {"equals": self._status_value}},
-                    {"property": "URL", "url": {"is_not_empty": True}},
-                    {"property": "send_status", "checkbox": {"equals": False}},
-                    {"property": "Duplicate", "select": {"is_empty": True}},
-                    {"property": "Created time", "created_time": {"on_or_after": cutoff}},
+                "or": [
+                    {"and": base_filters + [
+                        {"property": "Duplicate", "select": {"is_empty": True}},
+                    ]},
+                    {"and": base_filters + [
+                        {"property": "Duplicate", "select": {"equals": "Duplicate"}},
+                        {"property": "Urgency", "select": {"equals": "🔥🔥🔥"}},
+                    ]},
                 ]
             },
             "sorts": [{"property": "Created time", "direction": "ascending"}],
@@ -106,6 +117,7 @@ class NotionSource:
                     urgency=self._get_select(props, "Urgency"),
                     created_time=page.get("created_time", ""),
                     post_content=self._get_rich_text(props, "post_content"),
+                    was_duplicate=self._get_select(props, "Duplicate") == "Duplicate",
                 ))
 
             if not data.get("has_more"):
@@ -176,6 +188,22 @@ class NotionSource:
                     logger.info("Notion page %s marked Duplicate", page_id)
         except Exception as e:
             logger.warning("Notion mark_duplicate error for %s: %s", page_id, e)
+
+    async def clear_duplicate(self, page_id: str) -> None:
+        """Editor overrode a prior Duplicate mark by raising Urgency to
+        🔥🔥🔥 — clear the flag so the page no longer reads as duplicate
+        once it's actually published."""
+        try:
+            async with self._session.patch(
+                f"{NOTION_API_BASE}/pages/{page_id}",
+                headers=self._headers,
+                json={"properties": {"Duplicate": {"select": None}}},
+            ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    logger.warning("Notion clear_duplicate failed (%d) for %s: %s", resp.status, page_id, text[:200])
+        except Exception as e:
+            logger.warning("Notion clear_duplicate error for %s: %s", page_id, e)
 
     @staticmethod
     def _get_url(props: dict, key: str) -> Optional[str]:

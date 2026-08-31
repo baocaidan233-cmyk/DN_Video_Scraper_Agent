@@ -91,6 +91,11 @@ class Scheduler:
         rows = await self._notion.fetch_eligible_rows()
         candidates: list[NotionRow] = []
         for row in rows:
+            # A prior Duplicate drop already marked this URL "seen" — an
+            # editor override (Duplicate + 🔥🔥🔥) must still get through.
+            if row.was_duplicate and row.priority == 2:
+                candidates.append(row)
+                continue
             if await self._url_dedup.already_seen(row.url):
                 continue
             candidates.append(row)
@@ -176,7 +181,13 @@ class Scheduler:
                 await self._url_dedup.mark_seen(row.url)
                 return False
 
-        if await self._content_dedup.is_duplicate(caption):
+        override_duplicate = row.was_duplicate and row.priority == 2
+        if override_duplicate:
+            logger.info(
+                "Row %s previously marked Duplicate but editor raised Urgency to 🔥🔥🔥 — overriding, publishing anyway",
+                row.page_id,
+            )
+        elif await self._content_dedup.is_duplicate(caption):
             logger.info("Row %s dropped — matches a recently published caption", row.page_id)
             await self._url_dedup.mark_seen(row.url)
             await self._notion.mark_duplicate(
@@ -196,6 +207,8 @@ class Scheduler:
             await self._notion.mark_note_only(row.page_id, link)
         else:
             await self._notion.mark_published(row.page_id, caption, link)
+        if override_duplicate:
+            await self._notion.clear_duplicate(row.page_id)
         await self._url_dedup.mark_seen(row.url)
         await self._content_dedup.record(row.page_id, row.url, caption)
 
