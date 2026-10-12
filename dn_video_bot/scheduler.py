@@ -19,6 +19,7 @@ import time
 from datetime import datetime, timezone
 
 from core.redis_client import RedisClient
+from core.time_words import fix_time_words
 
 from .caption_writer import CaptionWriter
 from .content_dedup import ContentDedup
@@ -180,6 +181,15 @@ class Scheduler:
                 logger.warning("Skipping row %s — caption writer returned an empty body", row.page_id)
                 await self._url_dedup.mark_seen(row.url)
                 return False
+            # Every weekday and date in the caption is a day the tweet or its
+            # video gives, written as that day in US Eastern (AI-53, all
+            # channels on Eastern time; core/time_words.py, ported from
+            # DailyNews). A day neither gives is cut. The model's caption
+            # only: an editor's post_content goes out as written.
+            caption, time_fixes = fix_time_words(caption, f"\n{tweet.text}\n{transcript or ''}",
+                                                 tweet.created_at, row.url)
+            if time_fixes:
+                logger.info("Row %s time words — %s", row.page_id, " | ".join(time_fixes))
 
         override_duplicate = row.was_duplicate and row.priority >= 1
         if override_duplicate:
