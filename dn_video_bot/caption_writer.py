@@ -45,9 +45,14 @@ def _transcript_block(transcript: str) -> str:
 
 
 class CaptionWriter:
-    def __init__(self, openai_api_keys: list[str], model: str, breaking_window_hours: int) -> None:
+    def __init__(self, openai_api_keys: list[str], model: str, breaking_window_hours: int,
+                 reasoning_effort: str = "none") -> None:
         self._client = FailoverOpenAI(openai_api_keys)
         self._model = model
+        # The gpt-5 family takes a reasoning effort and max_completion_tokens,
+        # and no temperature; gpt-4o-mini takes the old pair.
+        self._params = ({"max_completion_tokens": 200, "reasoning_effort": reasoning_effort}
+                        if model.startswith("gpt-5") else {"max_tokens": 200, "temperature": 0.4})
         self._breaking_window_hours = breaking_window_hours
         self._system_prompt = _load_prompt("dn_video_caption_system.txt")
         self._user_template = _load_prompt("dn_video_caption_user.txt")
@@ -80,8 +85,7 @@ class CaptionWriter:
 
         response = await self._client.chat_completion(
             model=self._model,
-            max_tokens=200,
-            temperature=0.4,
+            **self._params,
             messages=[
                 {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": user_text},

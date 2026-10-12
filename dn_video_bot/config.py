@@ -56,7 +56,10 @@ class DnVideoBotConfig(BaseModel):
     # Caption is a rewrite of the tweet's own text PLUS a transcript of the
     # video's audio (see transcriber.py, added back 2026-08-06 — the transcript
     # regularly carries far more detail than the tweet text alone summarized).
-    caption_model: str = "gpt-4o-mini"
+    # Caidan, 2026-10-12: 也换成5.4mini，推理：none -- the same writer model the
+    # DailyNews / MW / CB / LN / AM1ST writers moved to on 10-11.
+    caption_model: str = "gpt-5.4-mini"
+    caption_reasoning_effort: str = "none"
     transcribe_model: str = "gpt-4o-mini-transcribe"
 
     # Failover: tried in order — if the primary key returns an
